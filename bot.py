@@ -10,6 +10,7 @@ import logging
 import random
 import aiohttp
 import requests 
+import urllib3 # SSL Warning বন্ধ করার জন্য
 import numpy as np 
 import cv2 
 from threading import Thread
@@ -28,6 +29,9 @@ from dotenv import load_dotenv
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# SSL Warnings বন্ধ করা (ISP ব্লকিং বাইপাস করার জন্য জরুরি)
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 # Load environment variables
 load_dotenv()
 
@@ -43,7 +47,7 @@ if not all([BOT_TOKEN, API_ID, API_HASH, TMDB_API_KEY]):
     exit(1)
 
 # ====================================================================
-# 🔥 OWNER PROFIT SETUP (বটের ওনারের ইনকাম সোর্স)
+# 🔥 OWNER PROFIT SETUP
 # ====================================================================
 OWNER_AD_LINKS = [
     "https://www.effectivegatecpm.com/c90zejmfrg?key=45a67d2f1523ee6b3988c4cc8f764a35",
@@ -113,7 +117,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "🤖 Bot is Running! (Face Detect & Profit Mode Active)"
+    return "🤖 Bot is Running! (SSL Bypass Active)"
 
 def run_flask():
     app.run(host='0.0.0.0', port=8080)
@@ -132,25 +136,21 @@ def keep_alive_pinger():
 def setup_resources():
     font_name = "kalpurush.ttf"
     if not os.path.exists(font_name):
-        logger.info("⬇️ Downloading Bengali Font (kalpurush.ttf)...")
+        logger.info("⬇️ Downloading Bengali Font...")
         try:
             r = requests.get(URL_FONT)
             with open(font_name, "wb") as f:
                 f.write(r.content)
-            logger.info("✅ Font Downloaded Successfully!")
-        except Exception as e:
-            logger.error(f"❌ Font Download Failed: {e}")
+        except Exception as e: logger.error(f"❌ Font Download Failed: {e}")
 
     model_name = "haarcascade_frontalface_default.xml"
     if not os.path.exists(model_name):
-        logger.info("⬇️ Downloading Face Detection Model...")
+        logger.info("⬇️ Downloading Face Model...")
         try:
             r = requests.get(URL_MODEL)
             with open(model_name, "wb") as f:
                 f.write(r.content)
-            logger.info("✅ Model Downloaded Successfully!")
-        except Exception as e:
-            logger.error(f"❌ Model Download Failed: {e}")
+        except Exception as e: logger.error(f"❌ Model Download Failed: {e}")
 
 setup_resources()
 
@@ -164,24 +164,41 @@ def get_font(size=60, bold=False):
              return ImageFont.truetype(font_file, size)
         return ImageFont.load_default()
     except Exception as e:
-        logger.error(f"Font Load Error: {e}")
         return ImageFont.load_default()
 
 # ====================================================================
-# 🔥 POWERFUL MULTI-SERVER UPLOAD FUNCTION (UPDATED)
+# 🔥 ULTRA POWERFUL UPLOAD FUNCTION (Fixed All Errors)
 # ====================================================================
 
 def upload_image_core(file_content):
     """
-    Attempts to upload to: Graph.org -> Catbox -> Envs.sh
+    Tries 3 servers with SSL Verification Disabled
+    1. 0x0.st (Best for Bypass)
+    2. Graph.org (Telegraph)
+    3. Catbox.moe
     """
     
-    # 1. Try Graph.org (Telegraph) - Fastest & No Block
+    # 1. Try 0x0.st (Most reliable for devs)
     try:
+        logger.info("📡 Trying 0x0.st...")
+        url = "https://0x0.st"
+        files = {'file': ('image.jpg', file_content)}
+        # verify=False is CRITICAL for Bangladesh ISPs
+        response = requests.post(url, files=files, timeout=10, verify=False)
+        if response.status_code == 200:
+            link = response.text.strip()
+            logger.info(f"✅ Uploaded to 0x0.st: {link}")
+            return link
+    except Exception as e:
+        logger.warning(f"⚠️ 0x0.st Failed: {e}")
+
+    # 2. Try Graph.org (Telegraph)
+    try:
+        logger.info("📡 Trying Graph.org...")
         url = "https://graph.org/upload"
         files = {'file': ('image.jpg', file_content, 'image/jpeg')}
-        headers = {"User-Agent": "Mozilla/5.0"}
-        response = requests.post(url, files=files, headers=headers, timeout=5)
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
+        response = requests.post(url, files=files, headers=headers, timeout=5, verify=False)
         if response.status_code == 200:
             json_data = response.json()
             link = "https://graph.org" + json_data[0]["src"]
@@ -190,35 +207,26 @@ def upload_image_core(file_content):
     except Exception as e:
         logger.warning(f"⚠️ Graph.org Failed: {e}")
 
-    # 2. Try Catbox.moe (Backup)
+    # 3. Try Catbox.moe
     try:
+        logger.info("📡 Trying Catbox.moe...")
         url = "https://catbox.moe/user/api.php"
         data = {"reqtype": "fileupload", "userhash": ""}
         files = {"fileToUpload": ("image.png", file_content, "image/png")}
         headers = {"User-Agent": "Mozilla/5.0"}
-        response = requests.post(url, data=data, files=files, headers=headers, timeout=8)
+        response = requests.post(url, data=data, files=files, headers=headers, timeout=8, verify=False)
         if response.status_code == 200:
-            logger.info("✅ Uploaded to Catbox")
-            return response.text.strip()
+            link = response.text.strip()
+            logger.info(f"✅ Uploaded to Catbox: {link}")
+            return link
     except Exception as e:
-        logger.warning(f"⚠️ Catbox Failed: {e}")
-
-    # 3. Try Envs.sh (Emergency Backup)
-    try:
-        url = "https://envs.sh"
-        files = {'file': ('image.jpg', file_content)}
-        response = requests.post(url, files=files, timeout=10)
-        if response.status_code == 200:
-            logger.info("✅ Uploaded to Envs.sh")
-            return response.text.strip()
-    except Exception as e:
-        logger.error(f"❌ Envs.sh Failed: {e}")
+        logger.error(f"❌ Catbox Failed: {e}")
 
     return None
 
 def upload_to_catbox_bytes(img_bytes):
-    # Wrapper for byte streams
     try:
+        # Reset pointer ensures data is fresh
         if hasattr(img_bytes, 'read'):
             img_bytes.seek(0)
             data = img_bytes.read()
@@ -230,7 +238,6 @@ def upload_to_catbox_bytes(img_bytes):
         return None
 
 def upload_to_catbox(file_path):
-    # Wrapper for local files
     try:
         with open(file_path, "rb") as f:
             data = f.read()
@@ -557,7 +564,8 @@ def generate_image(data):
         
         if not poster_url: return None, None
 
-        poster_bytes = requests.get(poster_url, timeout=10).content
+        # verify=False here too
+        poster_bytes = requests.get(poster_url, timeout=10, verify=False).content
         
         if data.get('badge_text'):
             badge_io = apply_badge_to_poster(poster_bytes, data['badge_text'])
@@ -570,7 +578,7 @@ def generate_image(data):
         if data.get('backdrop_path') and not data.get('is_manual'):
             try:
                 bd_url = f"https://image.tmdb.org/t/p/w1280{data['backdrop_path']}"
-                bd_bytes = requests.get(bd_url, timeout=10).content
+                bd_bytes = requests.get(bd_url, timeout=10, verify=False).content
                 backdrop = Image.open(io.BytesIO(bd_bytes)).convert("RGBA").resize((1280, 720))
             except: pass
         
@@ -741,18 +749,18 @@ async def text_handler(client, message):
         
     elif state == "manual_poster":
         if not message.photo: return await message.reply_text("⚠️ দয়া করে একটি ছবি (Photo) পাঠান।")
-        msg = await message.reply_text("⏳ Processing Image...")
+        msg = await message.reply_text("⏳ Processing Image (Trying 0x0.st, Graph.org, Catbox)...")
         try:
             photo_path = await message.download()
-            img_url = upload_to_catbox(photo_path) # Uses Multi-Server Logic
+            img_url = upload_to_catbox(photo_path) # Multi-Server Logic
             os.remove(photo_path)
             if img_url:
                 convo["details"]["manual_poster_url"] = img_url
                 convo["state"] = "ask_links"
                 buttons = [[InlineKeyboardButton("➕ Add Links", callback_data=f"lnk_yes_{uid}")], [InlineKeyboardButton("🏁 Finish", callback_data=f"lnk_no_{uid}")]]
-                await msg.edit_text("✅ ছবি আপলোড হয়েছে!\n\n🔗 এবার ডাউনলোড লিংক অ্যাড করবেন?", reply_markup=InlineKeyboardMarkup(buttons))
-            else: await msg.edit_text("❌ ইমেজ আপলোড ফেইল হয়েছে। (All Servers Failed)")
-        except: await msg.edit_text("❌ এরর হয়েছে।")
+                await msg.edit_text(f"✅ ছবি আপলোড হয়েছে!\n🔗 Link: {img_url}\n\n🔗 এবার ডাউনলোড লিংক অ্যাড করবেন?", reply_markup=InlineKeyboardMarkup(buttons))
+            else: await msg.edit_text("❌ ইমেজ আপলোড ফেইল হয়েছে। (Check Console for Errors)")
+        except: await msg.edit_text("❌ কোড ক্র্যাশ করেছে।")
 
     elif state == "wait_lang":
         convo["details"]["custom_language"] = text
