@@ -8,10 +8,10 @@ import time
 import asyncio
 import logging
 import random
-import base64  # 🔥 লিংক এনক্রিপশনের জন্য
+import base64
 import aiohttp
 import requests 
-import urllib3 # SSL Warning বন্ধ করার জন্য
+import urllib3 
 import numpy as np 
 import cv2 
 from threading import Thread
@@ -118,7 +118,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "🤖 Bot is Running! (Safety + Manual Toggle v29)"
+    return "🤖 Bot is Running! (Fixed Blur & Clear v30)"
 
 def run_flask():
     app.run(host='0.0.0.0', port=8080)
@@ -223,7 +223,7 @@ def upload_to_catbox(file_path):
         return upload_image_core(data)
     except: return None
 
-# ---- TMDB & LINK EXTRACTION (SMART UPDATE) ----
+# ---- TMDB & LINK EXTRACTION ----
 def extract_tmdb_id(text):
     # 1. TMDB Link
     tmdb_match = re.search(r'themoviedb\.org/(movie|tv)/(\d+)', text)
@@ -257,7 +257,6 @@ async def search_tmdb(query):
     except: return []
 
 async def get_tmdb_details(media_type, media_id):
-    # Fetching images for Screenshots + Adult Info
     url = f"https://api.themoviedb.org/3/{media_type}/{media_id}?api_key={TMDB_API_KEY}&append_to_response=credits,similar,images&include_image_language=en,null"
     return await fetch_url(url)
 
@@ -346,7 +345,7 @@ def apply_badge_to_poster(poster_bytes, text):
     except: return io.BytesIO(poster_bytes)
 
 # ============================================================================
-# 🔥 SAFE & SMART HTML GENERATOR (Base64, Blur, Timer, Force Adult)
+# 🔥 FIXED HTML GENERATOR (Blur Clear Logic Fixed)
 # ============================================================================
 def generate_html_code(data, links, ad_links_list):
     title = data.get("title") or data.get("name")
@@ -358,7 +357,7 @@ def generate_html_code(data, links, ad_links_list):
     
     BTN_TELEGRAM = "https://i.ibb.co/kVfJvhzS/photo-2025-12-23-12-38-56-7587031987190235140.jpg"
 
-    # 🔥 SCREENSHOTS (Neon + Blur if Adult)
+    # 🔥 SCREENSHOTS (Fixed: Added click toggle)
     ss_html = ""
     if not data.get('is_manual') and data.get("images"):
         backdrops = data["images"].get("backdrops", [])
@@ -367,9 +366,10 @@ def generate_html_code(data, links, ad_links_list):
             if count >= 4: break
             if bd.get('aspect_ratio', 1.7) > 1.2: 
                 ss_url = f"https://image.tmdb.org/t/p/w780{bd['file_path']}"
-                # If adult, apply blur class
+                # Blur logic for screenshots
                 blur_class = "blur-content" if is_adult else ""
-                ss_html += f'<div class="ss-wrapper"><img src="{ss_url}" class="neon-ss {blur_class}" alt="Screenshot"></div>'
+                # Added onclick logic here
+                ss_html += f'<div class="ss-wrapper"><img src="{ss_url}" class="neon-ss {blur_class}" onclick="toggleBlur(this)" alt="Screenshot"></div>'
                 count += 1
     
     ss_section = ""
@@ -381,10 +381,9 @@ def generate_html_code(data, links, ad_links_list):
         </div>
         """
 
-    # 🔥 BASE64 ENCRYPTION FOR LINKS (Copyright Protection)
+    # 🔥 BASE64 ENCRYPTION FOR LINKS
     links_html = ""
     for idx, link in enumerate(links):
-        # Encrypt the link
         encoded_url = base64.b64encode(link['url'].encode('utf-8')).decode('utf-8')
         
         links_html += f"""
@@ -413,18 +412,22 @@ def generate_html_code(data, links, ad_links_list):
             box-shadow: 0 4px 15px rgba(0,0,0,0.8); text-align: center;
         }
         
-        /* 🔥 SMART BLUR STYLES */
-        .blur-content { filter: blur(15px); transition: filter 0.5s ease; cursor: pointer; }
-        .blur-content:hover { filter: blur(5px); }
-        .blur-active { filter: none !important; }
+        /* 🔥 FIXED BLUR CSS: Only target .blur-content */
+        .blur-content { filter: blur(20px); transition: filter 0.4s ease; cursor: pointer; }
+        .blur-content:hover { filter: blur(10px); }
+        .blur-content.blur-active { filter: none !important; } /* Force clear */
         
         .poster-wrapper { position: relative; display: inline-block; width: 100%; max-width: 250px; }
+        
+        /* Button Control */
         .reveal-btn { 
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
             background: rgba(0,0,0,0.8); color: #FF5252; padding: 10px 20px; 
             border: 2px solid #FF5252; font-weight: bold; border-radius: 5px; 
-            cursor: pointer; display: none; z-index: 10;
+            cursor: pointer; display: none; z-index: 10; pointer-events: none; 
         }
+        
+        /* Only show button if wrapper has is-blurred class */
         .is-blurred .reveal-btn { display: block; }
 
         .poster-img { width: 100%; border-radius: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.7); margin-bottom: 15px; border: 2px solid #333; }
@@ -448,16 +451,22 @@ def generate_html_code(data, links, ad_links_list):
     </style>
     """
 
-    # JS For Decryption & Timer
+    # 🔥 JS LOGIC FIX
     script_html = f"""
     <script>
     const AD_LINKS = {json.dumps(final_ad_list)};
     
-    // Toggle Blur
     function toggleBlur(el) {{
+        // Toggle the blur-active class on the image itself
         el.classList.toggle('blur-active');
-        let btn = el.parentElement.querySelector('.reveal-btn');
-        if(btn) btn.style.display = 'none';
+        
+        // Find the wrapper parent
+        let wrapper = el.parentElement;
+        
+        // If it's the main poster wrapper, toggle the 'is-blurred' class to hide the button
+        if(wrapper.classList.contains('poster-wrapper')) {{
+            wrapper.classList.remove('is-blurred');
+        }}
     }}
 
     function secureLink(btn, b64Url, areaId) {{
@@ -488,16 +497,20 @@ def generate_html_code(data, links, ad_links_list):
     </script>
     """
     
-    # Conditional Class for Adult Content
-    poster_class = "blur-content is-blurred" if is_adult else ""
-    reveal_html = '<div class="reveal-btn" onclick="toggleBlur(this.parentElement.querySelector(\'.poster-img\'))">🔞 Click to Reveal</div>' if is_adult else ""
+    # 🔥 FIXED CLASS LOGIC:
+    # 1. Wrapper gets 'is-blurred' to show the RED BUTTON.
+    # 2. Image gets 'blur-content' to actually BLUR the image.
+    poster_wrapper_class = "is-blurred" if is_adult else ""
+    poster_img_class = "poster-img blur-content" if is_adult else "poster-img"
+    
+    reveal_html = '<div class="reveal-btn">🔞 Click to Reveal</div>' if is_adult else ""
 
     return f"""
-    <!-- Safe Mode Post -->
+    <!-- Safe Mode Post (Fixed v30) -->
     {style_html}
     <div class="main-card">
-        <div class="poster-wrapper {poster_class}">
-            <img src="{poster}" class="poster-img { "blur-content" if is_adult else "" }" onclick="toggleBlur(this)">
+        <div class="poster-wrapper {poster_wrapper_class}">
+            <img src="{poster}" class="{poster_img_class}" onclick="toggleBlur(this)">
             {reveal_html}
         </div>
         
@@ -568,8 +581,6 @@ def generate_image(data):
         if not poster_url: return None, None
 
         poster_bytes = requests.get(poster_url, timeout=10, verify=False).content
-        
-        # 🔥 Logic: TMDB Adult OR Manual Force Adult
         is_adult = data.get('adult', False) or data.get('force_adult', False)
         
         if data.get('badge_text'):
@@ -648,7 +659,7 @@ except Exception as e:
 async def start_cmd(client, message):
     user_conversations.pop(message.from_user.id, None)
     await message.reply_text(
-        "🎬 **Movie & Series Bot (Safety & Base64 v28)**\n\n"
+        "🎬 **Movie & Series Bot (Safety & Base64 v30)**\n\n"
         "⚡ `/post <Link or Name>` - Auto Post (Safe Mode)\n"
         "✍️ `/manual` - Custom Manual Post\n"
         "🛠 `/mysettings` - View Your Ad Links\n"
@@ -928,5 +939,5 @@ if __name__ == "__main__":
     ping_thread.daemon = True
     ping_thread.start()
     
-    print("🚀 Bot Started (v29 - Full Safety Toggle Integrated)!")
+    print("🚀 Bot Started (v30 - Blur Logic Fixed)!")
     bot.run()
