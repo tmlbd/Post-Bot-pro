@@ -8,6 +8,7 @@ import time
 import asyncio
 import logging
 import random
+import base64  # 🔥 লিংক এনক্রিপশনের জন্য
 import aiohttp
 import requests 
 import urllib3 # SSL Warning বন্ধ করার জন্য
@@ -29,7 +30,7 @@ from dotenv import load_dotenv
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# SSL Warnings বন্ধ করা (ISP ব্লকিং বাইপাস করার জন্য জরুরি)
+# SSL Warnings বন্ধ করা
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Load environment variables
@@ -64,7 +65,7 @@ DEFAULT_AD_LINKS = [
     "https://www.bing.com"
 ] 
 
-# ---- RESOURCES URLS (Fallback) ----
+# ---- RESOURCES URLS ----
 URL_FONT = "https://raw.githubusercontent.com/mahabub81/bangla-fonts/master/Kalpurush.ttf"
 URL_MODEL = "https://raw.githubusercontent.com/opencv/opencv/master/data/haarcascades/haarcascade_frontalface_default.xml"
 
@@ -117,7 +118,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "🤖 Bot is Running! (With Neon Screenshots)"
+    return "🤖 Bot is Running! (Safety, Base64 & Blur Enabled)"
 
 def run_flask():
     app.run(host='0.0.0.0', port=8080)
@@ -167,24 +168,18 @@ def get_font(size=60, bold=False):
         return ImageFont.load_default()
 
 # ====================================================================
-# 🔥 ULTRA POWERFUL UPLOAD FUNCTION (Optimized for Speed)
+# 🔥 ULTRA POWERFUL UPLOAD FUNCTION (Multi-Server)
 # ====================================================================
 
 def upload_image_core(file_content):
-    """
-    Tries 3 servers with Optimized Timeouts (Fast Response)
-    """
     # 1. Try 0x0.st (Fastest)
     try:
         url = "https://0x0.st"
         files = {'file': ('image.jpg', file_content)}
-        # Timeout reduced to 5s for speed, verify=False for ISP bypass
         response = requests.post(url, files=files, timeout=5, verify=False)
         if response.status_code == 200:
-            link = response.text.strip()
-            return link
-    except Exception as e:
-        pass 
+            return response.text.strip()
+    except: pass 
 
     # 2. Try Catbox.moe (Reliable)
     try:
@@ -192,15 +187,12 @@ def upload_image_core(file_content):
         data = {"reqtype": "fileupload", "userhash": ""}
         files = {"fileToUpload": ("image.png", file_content, "image/png")}
         headers = {"User-Agent": "Mozilla/5.0"}
-        # Timeout reduced to 6s
         response = requests.post(url, data=data, files=files, headers=headers, timeout=6, verify=False)
         if response.status_code == 200:
-            link = response.text.strip()
-            return link
-    except Exception as e:
-        pass
+            return response.text.strip()
+    except: pass
 
-    # 3. Try Graph.org (Telegraph) - Backup
+    # 3. Try Graph.org (Backup)
     try:
         url = "https://graph.org/upload"
         files = {'file': ('image.jpg', file_content, 'image/jpeg')}
@@ -208,10 +200,8 @@ def upload_image_core(file_content):
         response = requests.post(url, files=files, headers=headers, timeout=5, verify=False)
         if response.status_code == 200:
             json_data = response.json()
-            link = "https://graph.org" + json_data[0]["src"]
-            return link
-    except Exception as e:
-        pass
+            return "https://graph.org" + json_data[0]["src"]
+    except: pass
 
     logger.error("❌ All upload servers failed.")
     return None
@@ -224,27 +214,32 @@ def upload_to_catbox_bytes(img_bytes):
         else:
             data = img_bytes
         return upload_image_core(data)
-    except Exception as e:
-        logger.error(f"Byte Process Error: {e}")
-        return None
+    except: return None
 
 def upload_to_catbox(file_path):
     try:
         with open(file_path, "rb") as f:
             data = f.read()
         return upload_image_core(data)
-    except Exception as e:
-        logger.error(f"File Read Error: {e}")
-        return None
+    except: return None
 
-# ---- TMDB & LINK EXTRACTION ----
+# ---- TMDB & LINK EXTRACTION (SMART UPDATE) ----
 def extract_tmdb_id(text):
+    # 1. TMDB Link
     tmdb_match = re.search(r'themoviedb\.org/(movie|tv)/(\d+)', text)
     if tmdb_match:
         return tmdb_match.group(1), tmdb_match.group(2)
-    imdb_match = re.search(r'(tt\d+)', text)
-    if imdb_match:
-        return "imdb", imdb_match.group(1)
+    
+    # 2. IMDb Link (Strict)
+    imdb_url_match = re.search(r'imdb\.com/title/(tt\d+)', text)
+    if imdb_url_match:
+        return "imdb", imdb_url_match.group(1)
+
+    # 3. IMDb ID Only
+    imdb_id_match = re.search(r'(tt\d{6,})', text)
+    if imdb_id_match:
+        return "imdb", imdb_id_match.group(1)
+        
     return None, None
 
 async def search_tmdb(query):
@@ -259,12 +254,10 @@ async def search_tmdb(query):
         data = await fetch_url(url)
         if not data: return []
         return [r for r in data.get("results", []) if r.get("media_type") in ["movie", "tv"]][:15]
-    except Exception as e:
-        logger.error(f"TMDB Search Error: {e}")
-        return []
+    except: return []
 
 async def get_tmdb_details(media_type, media_id):
-    # 🔥 UPDATED API CALL: Added 'images' to fetch screenshots
+    # Fetching images for Screenshots + Adult Info
     url = f"https://api.themoviedb.org/3/{media_type}/{media_id}?api_key={TMDB_API_KEY}&append_to_response=credits,similar,images&include_image_language=en,null"
     return await fetch_url(url)
 
@@ -280,7 +273,7 @@ async def create_paste_link(content):
     return None
 
 # ============================================================================
-# 🔥 FACE DETECTION & SMART BADGE PLACEMENT SYSTEM
+# 🔥 FACE DETECTION & SMART BADGE
 # ============================================================================
 def get_smart_badge_position(pil_img):
     try:
@@ -294,8 +287,6 @@ def get_smart_badge_position(pil_img):
         face_cascade = cv2.CascadeClassifier(cascade_path)
         faces = face_cascade.detectMultiScale(gray, 1.1, 4)
         
-        height = pil_img.height
-        
         if len(faces) > 0:
             lowest_y = 0
             for (x, y, w, h) in faces:
@@ -304,15 +295,13 @@ def get_smart_badge_position(pil_img):
                     lowest_y = bottom_of_face
             
             target_y = lowest_y + 40 
-            if target_y > (height - 130):
+            if target_y > (pil_img.height - 130):
                 return 80 
             return target_y
         else:
-            return int(height * 0.40) 
+            return int(pil_img.height * 0.40) 
             
-    except Exception as e:
-        logger.error(f"Face Detect Error: {e}")
-        return 200
+    except: return 200
 
 def apply_badge_to_poster(poster_bytes, text):
     try:
@@ -333,11 +322,7 @@ def apply_badge_to_poster(poster_bytes, text):
         pos_x = (width - box_w) // 2
         
         overlay = Image.new('RGBA', base_img.size, (0,0,0,0))
-        draw_overlay = ImageDraw.Draw(overlay)
-        draw_overlay.rectangle(
-            [pos_x, pos_y, pos_x + box_w, pos_y + box_h], 
-            fill=(0, 0, 0, 220) 
-        )
+        ImageDraw.Draw(overlay).rectangle([pos_x, pos_y, pos_x + box_w, pos_y + box_h], fill=(0, 0, 0, 220))
         base_img = Image.alpha_composite(base_img, overlay)
         draw = ImageDraw.Draw(base_img)
         
@@ -358,43 +343,58 @@ def apply_badge_to_poster(poster_bytes, text):
         base_img.save(img_buffer, format="PNG")
         img_buffer.seek(0)
         return img_buffer
-    except Exception as e:
-        logger.error(f"Badge Apply Error: {e}")
-        return io.BytesIO(poster_bytes)
+    except: return io.BytesIO(poster_bytes)
 
 # ============================================================================
-# 🔥 OPTIMIZED HTML GENERATOR (Screenshots + Clear Instructions)
+# 🔥 SAFE & SMART HTML GENERATOR (Base64, Blur, Timer)
 # ============================================================================
 def generate_html_code(data, links, ad_links_list):
     title = data.get("title") or data.get("name")
     overview = data.get("overview", "")
     poster = data.get('manual_poster_url') or f"https://image.tmdb.org/t/p/w500{data.get('poster_path')}"
+    is_adult = data.get('adult', False)
     BTN_TELEGRAM = "https://i.ibb.co/kVfJvhzS/photo-2025-12-23-12-38-56-7587031987190235140.jpg"
 
-    # 🔥 SCREENSHOT LOGIC (Backdrops)
+    # 🔥 SCREENSHOTS (Neon + Blur if Adult)
     ss_html = ""
     if not data.get('is_manual') and data.get("images"):
         backdrops = data["images"].get("backdrops", [])
         count = 0
         for bd in backdrops:
             if count >= 4: break
-            # Keep landscape images
             if bd.get('aspect_ratio', 1.7) > 1.2: 
                 ss_url = f"https://image.tmdb.org/t/p/w780{bd['file_path']}"
-                # Added 'neon-ss' class for styling
-                ss_html += f'<img src="{ss_url}" class="neon-ss" alt="Screenshot">'
+                # If adult, apply blur class
+                blur_class = "blur-content" if is_adult else ""
+                ss_html += f'<div class="ss-wrapper"><img src="{ss_url}" class="neon-ss {blur_class}" alt="Screenshot"></div>'
                 count += 1
     
     ss_section = ""
     if ss_html:
         ss_section = f"""
         <div class="ss-container">
-            <h3 style="color: #ff00de; text-transform: uppercase; margin-bottom: 15px; border-bottom: 2px solid #ff00de; display: inline-block; padding-bottom: 5px;">📸 Screenshots</h3>
+            <h3 style="color: #ff00de; text-transform: uppercase; margin-bottom: 15px; border-bottom: 2px solid #ff00de; display: inline-block;">📸 SCREENSHOTS</h3>
             {ss_html}
         </div>
         """
 
-    # 🔥 MIX AD LINKS & SHUFFLE
+    # 🔥 BASE64 ENCRYPTION FOR LINKS (Copyright Protection)
+    links_html = ""
+    for idx, link in enumerate(links):
+        # Encrypt the link
+        encoded_url = base64.b64encode(link['url'].encode('utf-8')).decode('utf-8')
+        
+        links_html += f"""
+        <div class="dl-item">
+            <span class="dl-link-label">📂 {link['label']}</span>
+            <div id="area-{idx}">
+                <button class="rgb-btn" onclick="secureLink(this, '{encoded_url}', 'area-{idx}')">
+                    🔒 SECURE DOWNLOAD
+                </button>
+            </div>
+        </div>"""
+
+    # Ad Mixing
     final_ad_list = list(ad_links_list)
     if OWNER_AD_LINKS:
         final_ad_list.extend(OWNER_AD_LINKS)
@@ -404,31 +404,32 @@ def generate_html_code(data, links, ad_links_list):
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');
         body { margin: 0; padding: 10px; background-color: #050505; font-family: 'Poppins', sans-serif; color: #fff; }
-        
         .main-card {
             max-width: 600px; margin: 0 auto; background: #121212;
             border: 1px solid #333; border-radius: 15px; padding: 20px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.8); text-align: center;
         }
         
-        .poster-img {
-            width: 100%; max-width: 250px; border-radius: 10px;
-            box-shadow: 0 0 20px rgba(0,0,0,0.7); margin-bottom: 15px;
-            border: 2px solid #333;
-        }
+        /* 🔥 SMART BLUR STYLES */
+        .blur-content { filter: blur(15px); transition: filter 0.5s ease; cursor: pointer; }
+        .blur-content:hover { filter: blur(5px); }
+        .blur-active { filter: none !important; }
         
-        h2 { color: #00d2ff; margin: 10px 0; font-size: 22px; font-weight: 700; text-shadow: 0 0 10px rgba(0, 210, 255, 0.5); }
+        .poster-wrapper { position: relative; display: inline-block; width: 100%; max-width: 250px; }
+        .reveal-btn { 
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.8); color: #FF5252; padding: 10px 20px; 
+            border: 2px solid #FF5252; font-weight: bold; border-radius: 5px; 
+            cursor: pointer; display: none; z-index: 10;
+        }
+        .is-blurred .reveal-btn { display: block; }
+
+        .poster-img { width: 100%; border-radius: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.7); margin-bottom: 15px; border: 2px solid #333; }
+        h2 { color: #00d2ff; margin: 10px 0; font-size: 22px; font-weight: 700; }
         p { text-align: justify; color: #ccc; font-size: 13px; margin-bottom: 20px; line-height: 1.6; }
         
-        /* 🔥 NEON SCREENSHOT STYLES */
         .ss-container { margin: 25px 0; }
-        .neon-ss {
-            width: 100%; border-radius: 8px; margin-bottom: 12px;
-            border: 2px solid #ff00de; /* Pink Neon Border */
-            box-shadow: 0 0 15px rgba(255, 0, 222, 0.3); /* Neon Glow */
-            transition: transform 0.3s ease;
-        }
-        .neon-ss:hover { transform: scale(1.02); }
+        .neon-ss { width: 100%; border-radius: 8px; margin-bottom: 12px; border: 2px solid #ff00de; box-shadow: 0 0 15px rgba(255, 0, 222, 0.3); }
 
         .dl-item { background: #1f1f1f; padding: 15px; border-radius: 10px; margin-bottom: 15px; border: 1px solid #333; }
         .dl-link-label { display: block; font-size: 16px; color: #ffeb3b; margin-bottom: 10px; font-weight: 600; text-transform: uppercase; }
@@ -437,95 +438,73 @@ def generate_html_code(data, links, ad_links_list):
             width: 100%; padding: 14px; font-size: 18px; font-weight: bold;
             color: white; border: none; border-radius: 8px; cursor: pointer;
             background: linear-gradient(45deg, #FF512F, #DD2476);
-            box-shadow: 0 4px 10px rgba(221, 36, 118, 0.4);
-            transition: all 0.3s ease; text-decoration: none; display: flex; 
-            align-items: center; justify-content: center; gap: 10px;
+            display: flex; align-items: center; justify-content: center; gap: 10px;
         }
-        .rgb-btn:active { transform: scale(0.98); }
-        .rgb-btn.processing { background: #555; cursor: wait; box-shadow: none; }
         
-        /* 🔥 IMPROVED INSTRUCTION BOX */
-        .instruction-card {
-            background: #000;
-            border: 2px solid #ffeb3b; /* Yellow Border */
-            border-radius: 8px; padding: 15px;
-            margin: 20px 0; text-align: left;
-            box-shadow: 0 4px 10px rgba(255, 235, 59, 0.1);
-        }
-        .instruction-card h4 { margin: 0 0 10px 0; color: #ffeb3b; font-size: 16px; text-transform: uppercase; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #333; padding-bottom: 8px; }
-        .instruction-card ul { padding-left: 20px; margin: 0; }
-        .instruction-card li { color: #eee; font-size: 14px; margin-bottom: 8px; list-style-type: none; position: relative; }
-        .instruction-card li::before { content: "➤"; color: #00e676; position: absolute; left: -20px; }
-        .instruction-card b { color: #fff; font-weight: 700; }
+        .disclaimer { font-size: 10px; color: #555; margin-top: 30px; border-top: 1px solid #222; padding-top: 10px; }
     </style>
     """
 
-    links_html = ""
-    for idx, link in enumerate(links):
-        links_html += f"""
-        <div class="dl-item">
-            <span class="dl-link-label">📂 {link['label']}</span>
-            <div id="area-{idx}">
-                <button class="rgb-btn" data-clicks="0" onclick="processLink(this, '{link['url']}', 'area-{idx}')">
-                    ⬇️ DOWNLOAD / WATCH
-                </button>
-            </div>
-        </div>"""
-
+    # JS For Decryption & Timer
     script_html = f"""
     <script>
     const AD_LINKS = {json.dumps(final_ad_list)};
-    const MAX_CLICKS = 1; 
+    
+    // Toggle Blur
+    function toggleBlur(el) {{
+        el.classList.toggle('blur-active');
+        let btn = el.parentElement.querySelector('.reveal-btn');
+        if(btn) btn.style.display = 'none';
+    }}
 
-    function processLink(btn, realUrl, areaId) {{
-        let clicks = parseInt(btn.getAttribute('data-clicks') || 0);
-        btn.innerHTML = "⏳ Verifying..."; 
-        btn.classList.add('processing');
+    function secureLink(btn, b64Url, areaId) {{
+        // 1. Decrypt Link
+        let realUrl = atob(b64Url);
+        
+        // 2. Open Ad
+        let randomAd = AD_LINKS[Math.floor(Math.random() * AD_LINKS.length)];
+        window.open(randomAd, '_blank');
+        
+        // 3. Timer Logic
+        btn.innerHTML = "⏳ Verifying (5s)...";
         btn.disabled = true;
+        btn.style.background = "#555";
 
         setTimeout(() => {{
-            btn.disabled = false;
-            btn.classList.remove('processing');
-
-            if (clicks < MAX_CLICKS) {{
-                let randomAd = AD_LINKS[Math.floor(Math.random() * AD_LINKS.length)];
-                window.open(randomAd, '_blank');
-                btn.setAttribute('data-clicks', clicks + 1);
-                btn.innerHTML = "&#8635; Click Again (Get Link)"; 
-            }} else {{
-                btn.style.display = 'none';
-                let area = document.getElementById(areaId);
-                let successBtn = document.createElement('a');
-                successBtn.href = realUrl;
-                successBtn.className = 'rgb-btn';
-                successBtn.style.background = '#00C853'; 
-                successBtn.style.boxShadow = '0 4px 10px rgba(0, 200, 83, 0.4)';
-                successBtn.innerHTML = "&#9989; OPEN LINK";
-                successBtn.target = "_blank";
-                area.appendChild(successBtn);
-            }}
-        }}, 800); 
+            btn.style.display = 'none';
+            let area = document.getElementById(areaId);
+            let successBtn = document.createElement('a');
+            successBtn.href = realUrl;
+            successBtn.className = 'rgb-btn';
+            successBtn.style.background = '#00C853'; 
+            successBtn.innerHTML = "🚀 OPEN LINK";
+            successBtn.target = "_blank";
+            area.appendChild(successBtn);
+        }}, 5000); 
     }}
     </script>
     """
+    
+    # Conditional Class for Adult Content
+    poster_class = "blur-content is-blurred" if is_adult else ""
+    reveal_html = '<div class="reveal-btn" onclick="toggleBlur(this.parentElement.querySelector(\'.poster-img\'))">🔞 Click to Reveal</div>' if is_adult else ""
 
     return f"""
-    <!-- Updated Post with Neon Screenshots -->
+    <!-- Safe Mode Post -->
     {style_html}
     <div class="main-card">
-        <img src="{poster}" class="poster-img">
+        <div class="poster-wrapper {poster_class}">
+            <img src="{poster}" class="poster-img { "blur-content" if is_adult else "" }" onclick="toggleBlur(this)">
+            {reveal_html}
+        </div>
+        
         <h2>{title}</h2>
         <p>{overview[:350]}...</p>
         
         {ss_section}
         
-        <div class="instruction-card">
-            <h4>ℹ️ How to Download</h4>
-            <ul>
-                <li>Click the <b>Download</b> button above.</li>
-                <li>Wait for verification (if ad opens, press back).</li>
-                <li>Click the <b>Green Button</b> to get the link.</li>
-            </ul>
+        <div class="instruction-box">
+            ℹ️ <b>Safe Download:</b> Click the button, wait 5 seconds for verification.
         </div>
 
         <div class="dl-container-area">{links_html}</div>
@@ -535,13 +514,19 @@ def generate_html_code(data, links, ad_links_list):
                 <img src="{BTN_TELEGRAM}" style="width: 100%; max-width: 300px; border-radius: 50px; border: 2px solid #333;">
             </a>
         </div>
+        
+        <div class="disclaimer">
+            ⚖️ <b>Disclaimer:</b> We do not host any files. Links are provided by third-party users. 
+            Protected by DMCA. Content may contain 18+ themes.
+        </div>
     </div>
     {script_html}
     """
 
-# ---- IMAGE & CAPTION GENERATOR ----
+# ---- IMAGE & CAPTION GENERATOR (SAFE MODE) ----
 def generate_formatted_caption(data):
     title = data.get("title") or data.get("name") or "N/A"
+    is_adult = data.get('adult', False)
     
     if data.get('is_manual'):
         year = "Custom"
@@ -557,9 +542,15 @@ def generate_formatted_caption(data):
     overview = data.get("overview", "No plot available.")
     
     caption = f"🎬 **{title} ({year})**\n\n"
+    
+    # 🔥 Safety Warning
+    if is_adult:
+        caption += "⚠️ **WARNING: 18+ Content.**\n_Suitable for mature audiences only._\n\n"
+
     if not data.get('is_manual'):
         caption += f"**🎭 Genres:** {genres}\n**🗣️ Language:** {language}\n**⭐ Rating:** {rating}\n\n"
-    caption += f"**📝 Plot:** _{overview[:300]}..._"
+    
+    caption += f"**📝 Plot:** _{overview[:300]}..._\n\n⚠️ _Disclaimer: Informational post only._"
     return caption
 
 def generate_image(data):
@@ -571,8 +562,8 @@ def generate_image(data):
         
         if not poster_url: return None, None
 
-        # verify=False here too
         poster_bytes = requests.get(poster_url, timeout=10, verify=False).content
+        is_adult = data.get('adult', False)
         
         if data.get('badge_text'):
             badge_io = apply_badge_to_poster(poster_bytes, data['badge_text'])
@@ -580,6 +571,10 @@ def generate_image(data):
 
         poster_img = Image.open(io.BytesIO(poster_bytes)).convert("RGBA").resize((400, 600))
         
+        # 🔥 AUTO BLUR FOR TELEGRAM IMAGE
+        if is_adult:
+            poster_img = poster_img.filter(ImageFilter.GaussianBlur(20))
+
         bg_img = Image.new('RGBA', (1280, 720), (10, 10, 20))
         backdrop = None
         if data.get('backdrop_path') and not data.get('is_manual'):
@@ -604,12 +599,17 @@ def generate_image(data):
         title = data.get("title") or data.get("name")
         year = (data.get("release_date") or data.get("first_air_date") or "----")[:4]
         if data.get('is_manual'): year = ""
+        
+        if is_adult: title += " (18+)"
 
         draw.text((480, 80), f"{title} {year}", font=f_bold, fill="white", stroke_width=1, stroke_fill="black")
         
         if not data.get('is_manual'):
             draw.text((480, 140), f"⭐ {data.get('vote_average', 0):.1f}/10", font=f_reg, fill="#00e676")
-            draw.text((480, 180), " | ".join([g["name"] for g in data.get("genres", [])]), font=get_font(18), fill="#00bcd4")
+            if is_adult:
+                draw.text((480, 180), "⚠️ RESTRICTED CONTENT", font=get_font(18), fill="#FF5252")
+            else:
+                draw.text((480, 180), " | ".join([g["name"] for g in data.get("genres", [])]), font=get_font(18), fill="#00bcd4")
         
         overview = data.get("overview", "")
         lines = [overview[i:i+80] for i in range(0, len(overview), 80)][:6]
@@ -641,8 +641,8 @@ except Exception as e:
 async def start_cmd(client, message):
     user_conversations.pop(message.from_user.id, None)
     await message.reply_text(
-        "🎬 **Movie & Series Bot (Neon Screenshots Added)**\n\n"
-        "⚡ `/post <Link or Name>` - Auto Post (With Screenshots)\n"
+        "🎬 **Movie & Series Bot (Safety & Base64 v26)**\n\n"
+        "⚡ `/post <Link or Name>` - Auto Post (Safe Mode)\n"
         "✍️ `/manual` - Custom Manual Post\n"
         "🛠 `/mysettings` - View Your Ad Links\n"
         "⚙️ `/setadlink <URL1> <URL2>` - Set Ad Links"
@@ -695,11 +695,17 @@ async def post_cmd(client, message):
             find_url = f"https://api.themoviedb.org/3/find/{m_id}?api_key={TMDB_API_KEY}&external_source=imdb_id"
             data = await fetch_url(find_url)
             results = data.get("movie_results", []) + data.get("tv_results", [])
+            
             if results:
                 m_type = results[0]['media_type']
                 m_id = results[0]['id']
             else:
-                return await msg.edit_text("❌ IMDb ID not found in TMDB database.")
+                # 🔥 Fallback for Missing IMDb ID
+                return await msg.edit_text(
+                    "❌ **TMDB তে এই IMDb ID টি পাওয়া যায়নি!**\n\n"
+                    "অনুগ্রহ করে **নাম দিয়ে সার্চ** করুন:\n"
+                    f"উদাহরণ: `/post {query}`"
+                )
 
         details = await get_tmdb_details(m_type, m_id)
         if not details: return await msg.edit_text("❌ Details not found from Link.")
@@ -711,7 +717,7 @@ async def post_cmd(client, message):
         return
 
     results = await search_tmdb(query)
-    if not results: return await msg.edit_text("❌ No results found.")
+    if not results: return await msg.edit_text("❌ No results found. Check spelling.")
     
     buttons = []
     for r in results:
@@ -796,7 +802,7 @@ async def text_handler(client, message):
     
     elif state == "wait_badge_text":
         convo["details"]["badge_text"] = text
-        await message.reply_text(f"✅ ব্যাজ যুক্ত করা হচ্ছে: **{text}**\n\n🕵️‍♂️ **Detecting Faces to avoid covering...**\n⏳ Generating Final Post...")
+        await message.reply_text(f"✅ ব্যাজ যুক্ত করা হচ্ছে: **{text}**\n\n🕵️‍♂️ **Detecting Faces...**\n⏳ Generating Final Post (Safe Mode)...")
         await generate_final_post(client, uid, message)
 
 @bot.on_callback_query(filters.regex("^lnk_"))
@@ -810,7 +816,7 @@ async def link_cb(client, cb):
     
     if action == "lnk_yes":
         user_conversations[uid]["state"] = "wait_link_name"
-        await cb.message.edit_text("📝 বাটনের নাম লিখুন (Ex: '720p Download' or 'Watch Online'):")
+        await cb.message.edit_text("📝 বাটনের নাম লিখুন (Ex: '720p Download'):")
     else:
         user_conversations[uid]["state"] = "wait_badge_text"
         btns = [[InlineKeyboardButton("🚫 Skip Badge (No Text)", callback_data=f"skip_badge_{uid}")]]
@@ -827,7 +833,7 @@ async def skip_badge_cb(client, cb):
     uid = int(cb.data.split("_")[-1])
     if uid in user_conversations:
         user_conversations[uid]["details"]["badge_text"] = None
-        await cb.message.edit_text("⏳ Generating Final Post...")
+        await cb.message.edit_text("⏳ Generating Final Post (Safe Mode)...")
         await generate_final_post(client, uid, cb.message)
 
 async def generate_final_post(client, uid, message):
@@ -891,5 +897,5 @@ if __name__ == "__main__":
     ping_thread.daemon = True
     ping_thread.start()
     
-    print("🚀 Bot Started (Neon Screenshots & Instructions v24)!")
+    print("🚀 Bot Started (v26 - Full Smart & Safe Edition)!")
     bot.run()
