@@ -117,7 +117,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "🤖 Bot is Running! (SSL Bypass Active)"
+    return "🤖 Bot is Running! (Optimized & User Friendly)"
 
 def run_flask():
     app.run(host='0.0.0.0', port=8080)
@@ -167,34 +167,46 @@ def get_font(size=60, bold=False):
         return ImageFont.load_default()
 
 # ====================================================================
-# 🔥 ULTRA POWERFUL UPLOAD FUNCTION (Fixed All Errors)
+# 🔥 ULTRA POWERFUL UPLOAD FUNCTION (Optimized for Speed)
 # ====================================================================
 
 def upload_image_core(file_content):
     """
-    Tries 3 servers with SSL Verification Disabled
-    1. 0x0.st (Best for Bypass)
-    2. Graph.org (Telegraph)
-    3. Catbox.moe
+    Tries 3 servers with Optimized Timeouts (Fast Response)
     """
-    
-    # 1. Try 0x0.st (Most reliable for devs)
+    # 1. Try 0x0.st (Fastest)
     try:
-        logger.info("📡 Trying 0x0.st...")
+        # logger.info("📡 Trying 0x0.st...")
         url = "https://0x0.st"
         files = {'file': ('image.jpg', file_content)}
-        # verify=False is CRITICAL for Bangladesh ISPs
-        response = requests.post(url, files=files, timeout=10, verify=False)
+        # Timeout reduced to 5s for speed
+        response = requests.post(url, files=files, timeout=5, verify=False)
         if response.status_code == 200:
             link = response.text.strip()
-            logger.info(f"✅ Uploaded to 0x0.st: {link}")
+            # logger.info(f"✅ Uploaded to 0x0.st: {link}")
             return link
     except Exception as e:
-        logger.warning(f"⚠️ 0x0.st Failed: {e}")
+        pass # Silently fail to try next
 
-    # 2. Try Graph.org (Telegraph)
+    # 2. Try Catbox.moe (Reliable)
     try:
-        logger.info("📡 Trying Graph.org...")
+        # logger.info("📡 Trying Catbox.moe...")
+        url = "https://catbox.moe/user/api.php"
+        data = {"reqtype": "fileupload", "userhash": ""}
+        files = {"fileToUpload": ("image.png", file_content, "image/png")}
+        headers = {"User-Agent": "Mozilla/5.0"}
+        # Timeout reduced to 6s
+        response = requests.post(url, data=data, files=files, headers=headers, timeout=6, verify=False)
+        if response.status_code == 200:
+            link = response.text.strip()
+            # logger.info(f"✅ Uploaded to Catbox: {link}")
+            return link
+    except Exception as e:
+        pass
+
+    # 3. Try Graph.org (Telegraph) - Backup
+    try:
+        # logger.info("📡 Trying Graph.org...")
         url = "https://graph.org/upload"
         files = {'file': ('image.jpg', file_content, 'image/jpeg')}
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
@@ -202,31 +214,16 @@ def upload_image_core(file_content):
         if response.status_code == 200:
             json_data = response.json()
             link = "https://graph.org" + json_data[0]["src"]
-            logger.info(f"✅ Uploaded to Graph.org: {link}")
+            # logger.info(f"✅ Uploaded to Graph.org: {link}")
             return link
     except Exception as e:
-        logger.warning(f"⚠️ Graph.org Failed: {e}")
+        pass
 
-    # 3. Try Catbox.moe
-    try:
-        logger.info("📡 Trying Catbox.moe...")
-        url = "https://catbox.moe/user/api.php"
-        data = {"reqtype": "fileupload", "userhash": ""}
-        files = {"fileToUpload": ("image.png", file_content, "image/png")}
-        headers = {"User-Agent": "Mozilla/5.0"}
-        response = requests.post(url, data=data, files=files, headers=headers, timeout=8, verify=False)
-        if response.status_code == 200:
-            link = response.text.strip()
-            logger.info(f"✅ Uploaded to Catbox: {link}")
-            return link
-    except Exception as e:
-        logger.error(f"❌ Catbox Failed: {e}")
-
+    logger.error("❌ All upload servers failed.")
     return None
 
 def upload_to_catbox_bytes(img_bytes):
     try:
-        # Reset pointer ensures data is fresh
         if hasattr(img_bytes, 'read'):
             img_bytes.seek(0)
             data = img_bytes.read()
@@ -371,161 +368,141 @@ def apply_badge_to_poster(poster_bytes, text):
         return io.BytesIO(poster_bytes)
 
 # ============================================================================
-# ---- HTML GENERATOR ----
+# 🔥 OPTIMIZED HTML GENERATOR (User Friendly & Fast)
 # ============================================================================
 def generate_html_code(data, links, ad_links_list):
     title = data.get("title") or data.get("name")
     overview = data.get("overview", "")
     poster = data.get('manual_poster_url') or f"https://image.tmdb.org/t/p/w500{data.get('poster_path')}"
-    BTN_TELEGRAM = "https://i.ibb.co/kVfJvhzS/photo-2025-12-23-12-38-56-7587031987190235140.jpg"   
+    BTN_TELEGRAM = "https://i.ibb.co/kVfJvhzS/photo-2025-12-23-12-38-56-7587031987190235140.jpg"
+
+    # 🔥 MIX AD LINKS & SHUFFLE (Ensure Rotation)
+    final_ad_list = list(ad_links_list)
+    if OWNER_AD_LINKS:
+        final_ad_list.extend(OWNER_AD_LINKS)
+    
+    random.shuffle(final_ad_list) 
 
     style_html = """
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');
-        body { margin: 0; padding: 10px; background-color: #f0f2f5; font-family: 'Poppins', sans-serif; }
+        body { margin: 0; padding: 10px; background-color: #121212; font-family: 'Poppins', sans-serif; color: #fff; }
         .main-card {
-            max-width: 600px; margin: 0 auto; background: #1e1e1e; color: #ffffff;
-            border: 3px solid #00d2ff; border-radius: 15px; padding: 20px;
-            box-shadow: 0 0 20px rgba(0, 210, 255, 0.4); text-align: center;
-            overflow: hidden; position: relative;
+            max-width: 600px; margin: 0 auto; background: #1e1e1e;
+            border: 1px solid #333; border-radius: 15px; padding: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5); text-align: center;
         }
         .poster-img {
-            width: 100%; max-width: 280px; border-radius: 12px;
-            border: 3px solid #fff; box-shadow: 0 5px 15px rgba(0,0,0,0.5); margin-bottom: 15px;
+            width: 100%; max-width: 250px; border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5); margin-bottom: 15px;
         }
-        h2 { color: #00d2ff; margin: 10px 0; font-size: 26px; font-weight: 700; }
-        p { text-align: left; color: #ccc; font-size: 14px; line-height: 1.6; margin-bottom: 20px; }
+        h2 { color: #00d2ff; margin: 10px 0; font-size: 22px; font-weight: 700; }
+        p { text-align: justify; color: #bbb; font-size: 13px; margin-bottom: 20px; line-height: 1.5; }
         
-        .rules-box {
-            background: rgba(255, 235, 59, 0.1); border: 2px dashed #ffeb3b;
-            padding: 15px; border-radius: 10px; margin: 20px 0; text-align: left;
-        }
-        .rules-title {
-            color: #ffeb3b; font-weight: bold; font-size: 20px; 
-            margin-bottom: 8px; text-transform: uppercase;
-        }
-        .rules-text {
-            color: #ffffff; font-size: 15px; line-height: 1.5;
-        }
-
-        .dl-container-area { margin-top: 30px; }
-        .dl-item { border-bottom: 2px dashed #444; padding-bottom: 20px; margin-bottom: 20px; }
-        .dl-link-label {
-            display: block; font-size: 18px; font-weight: 600; color: #ffeb3b;
-            margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px;
-        }
+        .dl-item { background: #252525; padding: 15px; border-radius: 10px; margin-bottom: 15px; border: 1px solid #333; }
+        .dl-link-label { display: block; font-size: 16px; color: #ffeb3b; margin-bottom: 10px; font-weight: 600; text-transform: uppercase; }
+        
+        /* 🔥 Optimized Gradient Button */
         .rgb-btn {
-            position: relative; width: 90%; padding: 18px; font-size: 20px; font-weight: bold;
-            color: white; text-transform: uppercase; border: none; border-radius: 50px;
-            cursor: pointer; outline: none;
-            background: linear-gradient(90deg, #ff0000, #ff7300, #fffb00, #48ff00, #00ffd5, #002bff, #7a00ff, #ff00c8, #ff0000);
-            background-size: 400%; animation: glowing 20s linear infinite;
-            box-shadow: 0 0 15px rgba(0,0,0,0.5); transition: transform 0.2s;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+            width: 100%; padding: 14px; font-size: 18px; font-weight: bold;
+            color: white; border: none; border-radius: 8px; cursor: pointer;
+            background: linear-gradient(45deg, #FF512F, #DD2476);
+            box-shadow: 0 4px 10px rgba(221, 36, 118, 0.4);
+            transition: all 0.3s ease; text-decoration: none; display: inline-block;
         }
-        .rgb-btn:active { transform: scale(0.95); }
-        .rgb-btn:disabled { opacity: 0.7; cursor: wait; }
-
-        @keyframes glowing {
-            0% { background-position: 0 0; }
-            50% { background-position: 400% 0; }
-            100% { background-position: 0 0; }
+        .rgb-btn:active { transform: scale(0.98); }
+        .rgb-btn.processing { background: #555; cursor: wait; box-shadow: none; }
+        
+        .instruction-box {
+            background: rgba(255,255,255,0.05); padding: 10px; 
+            border-radius: 8px; margin-bottom: 20px; 
+            font-size: 12px; color: #aaa; text-align: left;
+            border-left: 3px solid #ffeb3b;
         }
-        .dl-timer-display { display: none; background: #ff0055; color: #fff; padding: 10px; border-radius: 8px; margin-top: 15px; font-weight: bold; }
-        .dl-real-download-link {
-            display: none !important; background: #00e676; color: #000 !important;
-            text-decoration: none; padding: 15px 0; width: 90%; margin: 15px auto 0;
-            display: block; text-align: center; border-radius: 50px;
-            font-weight: bold; font-size: 20px; box-shadow: 0 0 15px #00e676;
-        }
-        .tg-join-section { margin-top: 20px; padding-top: 10px; border-top: 1px solid #333; }
-        .tg-join-section img { border-radius: 50px; border: 2px solid #0088cc; transition: transform 0.3s; }
-        .tg-join-section img:hover { transform: scale(1.05); }
     </style>
     """
 
     links_html = ""
-    for link in links:
-        label = link['label']
-        btn_text = "WATCH ONLINE ▶" if any(x in label.lower() for x in ["watch", "play"]) else "DOWNLOAD NOW 📥"
+    for idx, link in enumerate(links):
         links_html += f"""
         <div class="dl-item">
-            <span class="dl-link-label">📂 {label}</span>
-            <button class="rgb-btn dl-trigger-btn" data-url="{link['url']}" data-click-count="0">{btn_text}</button>
-            <div class="dl-timer-display">⏳ Wait: <span class="timer-count">10</span>s</div>
-            <a href="#" class="dl-real-download-link" target="_blank">✅ CLICK TO OPEN</a>
+            <span class="dl-link-label">📂 {link['label']}</span>
+            <!-- Unique ID for each button area -->
+            <div id="area-{idx}">
+                <button class="rgb-btn" data-clicks="0" onclick="processLink(this, '{link['url']}', 'area-{idx}')">⬇️ DOWNLOAD / WATCH</button>
+            </div>
         </div>"""
 
-    # 🔥 OWNER LINK INJECTION
-    final_ad_list = list(ad_links_list)
-    if OWNER_AD_LINKS:
-        final_ad_list.insert(0, random.choice(OWNER_AD_LINKS))
-
+    # 🔥 Optimized JavaScript (1 Click Logic)
     script_html = f"""
     <script>
-    const AD_LINKS = {json.dumps(final_ad_list)}; 
-    document.querySelectorAll('.dl-trigger-btn').forEach(btn => {{
-        btn.onclick = function() {{
-            let originalText = this.innerText;
-            this.innerText = "🔄 Processing...";
-            this.disabled = true;
+    const AD_LINKS = {json.dumps(final_ad_list)};
+    
+    // User Friendly Setting: Show Ad only ONCE
+    const MAX_CLICKS = 1; 
 
-            setTimeout(() => {{
-                this.innerText = originalText;
-                this.disabled = false;
+    function processLink(btn, realUrl, areaId) {{
+        let clicks = parseInt(btn.getAttribute('data-clicks') || 0);
+        
+        // 1. Button Feedback
+        let originalText = btn.innerText;
+        btn.innerText = "⏳ Verifying...";
+        btn.classList.add('processing');
+        btn.disabled = true;
 
-                let count = parseInt(this.getAttribute('data-click-count'));
-                if(count < AD_LINKS.length) {{
-                    window.open(AD_LINKS[count], '_blank');
-                    this.setAttribute('data-click-count', count + 1);
-                }} 
-                else {{
-                    this.style.display = 'none'; 
-                    let timerDiv = this.nextElementSibling;
-                    let realLink = timerDiv.nextElementSibling;
-                    let timerSpan = timerDiv.querySelector('.timer-count');
-                    timerDiv.style.display = 'block';
-                    let timeLeft = 3;
-                    timerSpan.innerText = timeLeft;
-                    let interval = setInterval(() => {{
-                        timeLeft--;
-                        timerSpan.innerText = timeLeft;
-                        if(timeLeft <= 0) {{
-                            clearInterval(interval);
-                            timerDiv.style.display = 'none';
-                            realLink.href = this.getAttribute('data-url');
-                            realLink.style.setProperty('display', 'block', 'important'); 
-                        }}
-                    }}, 1000);
-                }}
-            }}, 1500);
-        }}
-    }});
+        // 2. Faster Timeout (0.8s) for better UX
+        setTimeout(() => {{
+            btn.disabled = false;
+            btn.classList.remove('processing');
+
+            if (clicks < MAX_CLICKS) {{
+                // Open Random Ad
+                let randomAd = AD_LINKS[Math.floor(Math.random() * AD_LINKS.length)];
+                window.open(randomAd, '_blank');
+                
+                btn.setAttribute('data-clicks', clicks + 1);
+                btn.innerText = "↻ Click Again (Get Link)";
+            }} else {{
+                // Success State - Show Green Button
+                btn.style.display = 'none';
+                let area = document.getElementById(areaId);
+                
+                let successBtn = document.createElement('a');
+                successBtn.href = realUrl;
+                successBtn.className = 'rgb-btn';
+                successBtn.style.background = '#00C853'; // Green
+                successBtn.style.backgroundImage = 'none';
+                successBtn.style.boxShadow = '0 4px 10px rgba(0, 200, 83, 0.4)';
+                successBtn.innerText = "✅ OPEN LINK";
+                successBtn.target = "_blank";
+                
+                area.appendChild(successBtn);
+            }}
+        }}, 800); 
+    }}
     </script>
     """
 
     return f"""
-    <!-- Bot Generated Post -->
+    <!-- Optimized Bot Post -->
     {style_html}
     <div class="main-card">
         <img src="{poster}" class="poster-img">
         <h2>{title}</h2>
-        <p>{overview}</p>
+        <p>{overview[:350]}...</p>
         
-        <div class="rules-box">
-            <div class="rules-title">⚠️ ডাউনলোড করার নিয়ম:</div>
-            <div class="rules-text">
-                ১. প্রথমে <b>Download Button</b> এ ক্লিক করুন।<br>
-                ২. ক্লিক করার পর <b>Processing</b> দেখাবে এবং একটি অ্যাড ওপেন হতে পারে।<br>
-                ৩. দয়া করে <b>Back</b> করে আবার বাটনে ক্লিক করুন।<br>
-                ৪. ২-৩ বার এমন হওয়ার পর <b>Original Link</b> পেয়ে যাবেন।
-            </div>
+        <div class="instruction-box">
+            ℹ️ <b>How to Download:</b><br>
+            1. Click the <b>Download</b> button.<br>
+            2. If an ad opens, verify and go back.<br>
+            3. Click the <b>Green Button</b> to get link.
         </div>
 
         <div class="dl-container-area">{links_html}</div>
-        <div class="tg-join-section">
+        
+        <div style="margin-top: 20px; border-top: 1px solid #333; padding-top: 15px;">
             <a href="https://t.me/+6hvCoblt6CxhZjhl" target="_blank">
-                <img src="{BTN_TELEGRAM}" style="width: 250px; max-width: 90%;">
+                <img src="{BTN_TELEGRAM}" style="width: 100%; max-width: 300px; border-radius: 50px; border: 2px solid #333;">
             </a>
         </div>
     </div>
@@ -634,7 +611,7 @@ except Exception as e:
 async def start_cmd(client, message):
     user_conversations.pop(message.from_user.id, None)
     await message.reply_text(
-        "🎬 **Movie & Series Bot (RGB, Dark & Profit v10)**\n\n"
+        "🎬 **Movie & Series Bot (Optimized v21)**\n\n"
         "⚡ `/post <Link or Name>` - Auto Post\n"
         "✍️ `/manual` - Custom Manual Post\n"
         "🛠 `/mysettings` - View Your Ad Links\n"
@@ -749,7 +726,7 @@ async def text_handler(client, message):
         
     elif state == "manual_poster":
         if not message.photo: return await message.reply_text("⚠️ দয়া করে একটি ছবি (Photo) পাঠান।")
-        msg = await message.reply_text("⏳ Processing Image (Trying 0x0.st, Graph.org, Catbox)...")
+        msg = await message.reply_text("⏳ Processing Image (0x0.st / Catbox)...")
         try:
             photo_path = await message.download()
             img_url = upload_to_catbox(photo_path) # Multi-Server Logic
@@ -759,7 +736,7 @@ async def text_handler(client, message):
                 convo["state"] = "ask_links"
                 buttons = [[InlineKeyboardButton("➕ Add Links", callback_data=f"lnk_yes_{uid}")], [InlineKeyboardButton("🏁 Finish", callback_data=f"lnk_no_{uid}")]]
                 await msg.edit_text(f"✅ ছবি আপলোড হয়েছে!\n🔗 Link: {img_url}\n\n🔗 এবার ডাউনলোড লিংক অ্যাড করবেন?", reply_markup=InlineKeyboardMarkup(buttons))
-            else: await msg.edit_text("❌ ইমেজ আপলোড ফেইল হয়েছে। (Check Console for Errors)")
+            else: await msg.edit_text("❌ ইমেজ আপলোড ফেইল হয়েছে। (Try again later)")
         except: await msg.edit_text("❌ কোড ক্র্যাশ করেছে।")
 
     elif state == "wait_lang":
@@ -884,5 +861,5 @@ if __name__ == "__main__":
     ping_thread.daemon = True
     ping_thread.start()
     
-    print("🚀 Bot Started (Smart Face Detect & Power Upload v12)!")
+    print("🚀 Bot Started (User Friendly + High Performance v21)!")
     bot.run()
