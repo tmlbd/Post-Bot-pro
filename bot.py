@@ -118,7 +118,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "🤖 Bot is Running! (Fixed Blur & Clear v30)"
+    return "🤖 Bot is Running! (Manual Screenshots & Redirect v32)"
 
 def run_flask():
     app.run(host='0.0.0.0', port=8080)
@@ -345,7 +345,7 @@ def apply_badge_to_poster(poster_bytes, text):
     except: return io.BytesIO(poster_bytes)
 
 # ============================================================================
-# 🔥 FIXED HTML GENERATOR (Auto Redirect Added)
+# 🔥 FIXED HTML GENERATOR (Priority: Manual Screenshots)
 # ============================================================================
 def generate_html_code(data, links, ad_links_list):
     title = data.get("title") or data.get("name")
@@ -357,9 +357,16 @@ def generate_html_code(data, links, ad_links_list):
     
     BTN_TELEGRAM = "https://i.ibb.co/kVfJvhzS/photo-2025-12-23-12-38-56-7587031987190235140.jpg"
 
-    # 🔥 SCREENSHOTS
+    # 🔥 SCREENSHOTS LOGIC (UPDATED)
     ss_html = ""
-    if not data.get('is_manual') and data.get("images"):
+    # 1. Check for Manual Screenshots First
+    if data.get('manual_screenshots'):
+        for ss_url in data['manual_screenshots']:
+            blur_class = "blur-content" if is_adult else ""
+            ss_html += f'<div class="ss-wrapper"><img src="{ss_url}" class="neon-ss {blur_class}" onclick="toggleBlur(this)" alt="Screenshot"></div>'
+    
+    # 2. Fallback to Auto TMDB Screenshots
+    elif not data.get('is_manual') and data.get("images"):
         backdrops = data["images"].get("backdrops", [])
         count = 0
         for bd in backdrops:
@@ -493,7 +500,7 @@ def generate_html_code(data, links, ad_links_list):
     reveal_html = '<div class="reveal-btn">🔞 Click to Reveal</div>' if is_adult else ""
 
     return f"""
-    <!-- Auto Redirect Code (Fixed v31) -->
+    <!-- Auto Redirect Code (Fixed v32) -->
     {style_html}
     <div class="main-card">
         <div class="poster-wrapper {poster_wrapper_class}">
@@ -646,11 +653,12 @@ except Exception as e:
 async def start_cmd(client, message):
     user_conversations.pop(message.from_user.id, None)
     await message.reply_text(
-        "🎬 **Movie & Series Bot (Auto Redirect v31)**\n\n"
-        "⚡ `/post <Link or Name>` - Auto Post (Safe Mode)\n"
-        "✍️ `/manual` - Custom Manual Post\n"
-        "🛠 `/mysettings` - View Your Ad Links\n"
-        "⚙️ `/setadlink <URL1> <URL2>` - Set Ad Links"
+        "🎬 **Movie & Series Bot (v32)**\n"
+        "✨ **New:** Manual Screenshots + Auto Redirect\n\n"
+        "⚡ `/post <Link or Name>` - Auto Post\n"
+        "✍️ `/manual` - Custom Post (Poster + Screenshots)\n"
+        "🛠 `/mysettings` - View Ad Links\n"
+        "⚙️ `/setadlink <URL>` - Set Ad Links"
     )
 
 @bot.on_message(filters.command("mysettings") & filters.private)
@@ -679,7 +687,7 @@ async def set_ad(client, message):
 async def manual_post_cmd(client, message):
     uid = message.from_user.id
     user_conversations[uid] = {
-        "details": {"is_manual": True}, 
+        "details": {"is_manual": True, "manual_screenshots": []}, 
         "links": [], 
         "state": "manual_title"
     }
@@ -705,12 +713,7 @@ async def post_cmd(client, message):
                 m_type = results[0]['media_type']
                 m_id = results[0]['id']
             else:
-                # Fallback for Missing IMDb ID
-                return await msg.edit_text(
-                    "❌ **TMDB তে এই IMDb ID টি পাওয়া যায়নি!**\n\n"
-                    "অনুগ্রহ করে **নাম দিয়ে সার্চ** করুন:\n"
-                    f"উদাহরণ: `/post {query}`"
-                )
+                return await msg.edit_text("❌ IMDb ID not found in TMDB.")
 
         details = await get_tmdb_details(m_type, m_id)
         if not details: return await msg.edit_text("❌ Details not found from Link.")
@@ -767,18 +770,45 @@ async def text_handler(client, message):
         
     elif state == "manual_poster":
         if not message.photo: return await message.reply_text("⚠️ দয়া করে একটি ছবি (Photo) পাঠান।")
-        msg = await message.reply_text("⏳ Processing Image (0x0.st / Catbox)...")
+        msg = await message.reply_text("⏳ Processing Poster...")
         try:
             photo_path = await message.download()
-            img_url = upload_to_catbox(photo_path) # Multi-Server Logic
+            img_url = upload_to_catbox(photo_path) 
             os.remove(photo_path)
             if img_url:
                 convo["details"]["manual_poster_url"] = img_url
-                convo["state"] = "ask_links"
-                buttons = [[InlineKeyboardButton("➕ Add Links", callback_data=f"lnk_yes_{uid}")], [InlineKeyboardButton("🏁 Finish", callback_data=f"lnk_no_{uid}")]]
-                await msg.edit_text(f"✅ ছবি আপলোড হয়েছে!\n🔗 Link: {img_url}\n\n🔗 এবার ডাউনলোড লিংক অ্যাড করবেন?", reply_markup=InlineKeyboardMarkup(buttons))
-            else: await msg.edit_text("❌ ইমেজ আপলোড ফেইল হয়েছে। (Try again later)")
-        except: await msg.edit_text("❌ কোড ক্র্যাশ করেছে।")
+                # 🔥 NEW STEP: Ask for Screenshots
+                convo["state"] = "ask_screenshots"
+                buttons = [
+                    [InlineKeyboardButton("📸 Add Screenshots", callback_data=f"ss_yes_{uid}")],
+                    [InlineKeyboardButton("⏭️ Skip", callback_data=f"ss_no_{uid}")]
+                ]
+                await msg.edit_text(f"✅ Poster Uploaded!\n\n📸 **Add Custom Screenshots?**\n(Or skip to use default/none)", reply_markup=InlineKeyboardMarkup(buttons))
+            else: await msg.edit_text("❌ Poster Upload Failed.")
+        except: await msg.edit_text("❌ Error uploading poster.")
+
+    # 🔥 HANDLE SCREENSHOT UPLOADS
+    elif state == "wait_screenshots":
+        if not message.photo: return await message.reply_text("⚠️ Please send a PHOTO for screenshot.")
+        
+        msg = await message.reply_text("⏳ Uploading Screenshot...")
+        try:
+            photo_path = await message.download()
+            ss_url = upload_to_catbox(photo_path)
+            os.remove(photo_path)
+            
+            if ss_url:
+                if "manual_screenshots" not in convo["details"]:
+                    convo["details"]["manual_screenshots"] = []
+                convo["details"]["manual_screenshots"].append(ss_url)
+                
+                count = len(convo["details"]["manual_screenshots"])
+                buttons = [[InlineKeyboardButton("✅ DONE", callback_data=f"ss_done_{uid}")]]
+                await msg.edit_text(f"✅ **Screenshot {count} Added!**\n\nSend another photo OR click DONE.", reply_markup=InlineKeyboardMarkup(buttons))
+            else:
+                await msg.edit_text("❌ Failed to upload screenshot.")
+        except:
+            await msg.edit_text("❌ Error processing screenshot.")
 
     elif state == "wait_lang":
         convo["details"]["custom_language"] = text
@@ -807,12 +837,33 @@ async def text_handler(client, message):
     
     elif state == "wait_badge_text":
         convo["details"]["badge_text"] = text
-        # 🔥 ASK SAFETY CHECK INSTEAD OF DIRECT GENERATION
         buttons = [
             [InlineKeyboardButton("✅ Safe Content", callback_data=f"safe_yes_{uid}")],
             [InlineKeyboardButton("🔞 18+ (Force Blur)", callback_data=f"safe_no_{uid}")]
         ]
         await message.reply_text("🛡️ **Safety Check:**\nIs this content 18+/Adult?", reply_markup=InlineKeyboardMarkup(buttons))
+
+# 🔥 NEW: Handle Screenshot Callbacks
+@bot.on_callback_query(filters.regex("^ss_"))
+async def ss_cb(client, cb):
+    try:
+        action, uid_str = cb.data.rsplit("_", 1)
+        uid = int(uid_str)
+    except: return
+
+    if uid != cb.from_user.id: return await cb.answer("Not for you!", show_alert=True)
+    
+    if action == "ss_yes":
+        user_conversations[uid]["state"] = "wait_screenshots"
+        user_conversations[uid]["details"]["manual_screenshots"] = []
+        await cb.message.edit_text("📸 **Send Screenshots now.**\n(Send photos one by one)")
+    
+    elif action == "ss_no" or action == "ss_done":
+        # Proceed to next step (Language)
+        user_conversations[uid]["state"] = "wait_lang"
+        ss_count = len(user_conversations[uid]["details"].get("manual_screenshots", []))
+        msg_text = f"✅ Saved {ss_count} screenshots." if action == "ss_done" else "⏭️ Screenshots Skipped."
+        await cb.message.edit_text(f"{msg_text}\n\n🗣️ Enter **Language** (e.g. Hindi):")
 
 @bot.on_callback_query(filters.regex("^lnk_"))
 async def link_cb(client, cb):
@@ -842,14 +893,12 @@ async def skip_badge_cb(client, cb):
     uid = int(cb.data.split("_")[-1])
     if uid in user_conversations:
         user_conversations[uid]["details"]["badge_text"] = None
-        # 🔥 ASK SAFETY CHECK HERE TOO
         buttons = [
             [InlineKeyboardButton("✅ Safe Content", callback_data=f"safe_yes_{uid}")],
             [InlineKeyboardButton("🔞 18+ (Force Blur)", callback_data=f"safe_no_{uid}")]
         ]
         await cb.message.edit_text("🛡️ **Safety Check:**\nIs this content 18+/Adult?", reply_markup=InlineKeyboardMarkup(buttons))
 
-# 🔥 NEW: Handle Safety Selection
 @bot.on_callback_query(filters.regex("^safe_"))
 async def safety_cb(client, cb):
     try:
@@ -859,7 +908,6 @@ async def safety_cb(client, cb):
 
     if uid not in user_conversations: return
     
-    # Set manual 18+ flag based on button click
     user_conversations[uid]["details"]["force_adult"] = True if action == "safe_no" else False
     
     await cb.message.edit_text("⏳ Generating Final Post...")
@@ -926,5 +974,5 @@ if __name__ == "__main__":
     ping_thread.daemon = True
     ping_thread.start()
     
-    print("🚀 Bot Started (v31 - Auto Redirect Added)!")
+    print("🚀 Bot Started (v32 - Manual Screenshots Added)!")
     bot.run()
