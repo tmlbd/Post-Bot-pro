@@ -44,9 +44,10 @@ API_ID = os.getenv("API_ID")
 API_HASH = os.getenv("API_HASH")
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
 
-# 🔥 NEW ADMIN & DB CONFIG
+# 🔥 ADMIN & DB CONFIG
 MONGO_URL = os.getenv("MONGO_URL") 
 OWNER_ID = int(os.getenv("OWNER_ID", 0)) 
+OWNER_USERNAME = os.getenv("OWNER_USERNAME", "admin") # 🔥 NEW: আপনার ইউজারনেম
 LOG_CHANNEL_ID = int(os.getenv("LOG_CHANNEL_ID", 0))
 
 # Check Variables
@@ -149,7 +150,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "🤖 Ultimate Bot Running (MongoDB + Log Channel + 4x Upload) v36"
+    return "🤖 v37 Bot Running (Contact Button Added)"
 
 def run_flask():
     app.run(host='0.0.0.0', port=8080)
@@ -202,7 +203,6 @@ def get_font(size=60, bold=False):
 # 🔥 ULTRA POWERFUL UPLOAD FUNCTION (4-Layer Backup System)
 # ====================================================================
 def upload_image_core(file_content):
-    # 1. Catbox.moe
     try:
         url = "https://catbox.moe/user/api.php"
         data = {"reqtype": "fileupload", "userhash": ""}
@@ -212,7 +212,6 @@ def upload_image_core(file_content):
         if response.status_code == 200: return response.text.strip()
     except: pass
 
-    # 2. 0x0.st
     try:
         url = "https://0x0.st"
         files = {'file': ('image.jpg', file_content)}
@@ -220,7 +219,6 @@ def upload_image_core(file_content):
         if response.status_code == 200: return response.text.strip()
     except: pass
 
-    # 3. Uguu.se
     try:
         url = "https://uguu.se/upload"
         files = {'files[]': ('image.jpg', file_content)}
@@ -230,7 +228,6 @@ def upload_image_core(file_content):
             if json_data.get("success"): return json_data["files"][0]["url"]
     except: pass
 
-    # 4. Graph.org
     try:
         url = "https://graph.org/upload"
         files = {'file': ('image.jpg', file_content, 'image/jpeg')}
@@ -365,7 +362,7 @@ def apply_badge_to_poster(poster_bytes, text):
     except: return io.BytesIO(poster_bytes)
 
 # ============================================================================
-# 🔥 HTML GENERATOR (EXACT REPLICA OF ORIGINAL DESIGN)
+# 🔥 HTML GENERATOR
 # ============================================================================
 def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list):
     title = data.get("title") or data.get("name")
@@ -387,13 +384,10 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list):
     """
 
     ss_html = ""
-    # 1. Manual Screenshots (Restored Original Logic)
     if data.get('manual_screenshots'):
         for ss_url in data['manual_screenshots']:
             blur_class = "blur-content" if is_adult else ""
             ss_html += f'<div class="ss-wrapper"><img src="{ss_url}" class="neon-ss {blur_class}" onclick="toggleBlur(this)" alt="Screenshot"></div>'
-    
-    # 2. TMDB Screenshots
     elif not data.get('is_manual') and data.get("images"):
         backdrops = data["images"].get("backdrops", [])
         count = 0
@@ -480,7 +474,7 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list):
     reveal_html = '<div class="reveal-btn">🔞 Click to Reveal</div>' if is_adult else ""
 
     return f"""
-    <!-- Auto Redirect Code (v36 Pro) -->
+    <!-- Auto Redirect Code (v37) -->
     {style_html}
     <div class="main-card">
         <div class="poster-wrapper {poster_wrapper_class}">
@@ -602,10 +596,17 @@ async def start_cmd(client, message):
     await add_user(uid, name) 
     
     user_conversations.pop(uid, None)
+    
+    # 🔥 Check Auth
     if not await is_authorized(uid):
-        return await message.reply_text("⚠️ **ACCESS DENIED**\n\nYou need admin approval to use this bot.\nContact Owner.")
+        # 🔥 Added Contact Button
+        btn = [[InlineKeyboardButton("💬 Contact Admin", url=f"https://t.me/{OWNER_USERNAME}")]]
+        return await message.reply_text(
+            "⚠️ **ACCESS DENIED**\n\nYou need admin approval to use this bot.\nContact Owner.",
+            reply_markup=InlineKeyboardMarkup(btn)
+        )
 
-    await message.reply_text("🎬 **Movie & Series Bot (v36 Ultimate)**\n✨ **Status:** Authorized User ✅\n\n⚡ `/post <Link or Name>` - Auto Post\n✍️ `/manual` - Custom Post\n🛠 `/mysettings` - View Ad Links\n⚙️ `/setadlink <URL>` - Set Ad Links")
+    await message.reply_text("🎬 **Movie & Series Bot (v37 Ultimate)**\n✨ **Status:** Authorized User ✅\n\n⚡ `/post <Link or Name>` - Auto Post\n✍️ `/manual` - Custom Post\n🛠 `/mysettings` - View Ad Links\n⚙️ `/setadlink <URL>` - Set Ad Links")
 
 @bot.on_message(filters.command("auth") & filters.user(OWNER_ID))
 async def auth_user(client, message):
@@ -627,7 +628,7 @@ async def ban_user(client, message):
 @bot.on_message(filters.command("stats") & filters.user(OWNER_ID))
 async def bot_stats(client, message):
     total = await get_all_users_count()
-    await message.reply_text(f"📊 **BOT STATISTICS**\n\n👥 **Total Users:** {total}\n✅ **System:** Online\n🚀 **Version:** v36 (Final)")
+    await message.reply_text(f"📊 **BOT STATISTICS**\n\n👥 **Total Users:** {total}\n✅ **System:** Online\n🚀 **Version:** v37")
 
 @bot.on_message(filters.command("setownerads") & filters.user(OWNER_ID))
 async def set_owner_ads_cmd(client, message):
@@ -916,5 +917,5 @@ if __name__ == "__main__":
     ping_thread.daemon = True
     ping_thread.start()
     
-    print("🚀 Ultimate Bot Started (v36)!")
+    print("🚀 Ultimate Bot Started (v37)!")
     bot.run()
