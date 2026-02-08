@@ -115,10 +115,9 @@ async def set_owner_ads_db(links):
         upsert=True
     )
 
-# 🔥 AUTO DELETE FUNCTIONS (NEW)
+# 🔥 AUTO DELETE FUNCTIONS
 async def get_auto_delete_timer():
     data = await settings_col.find_one({"_id": "main_config"})
-    # Default 600 seconds (10 Minutes) if not set
     return data.get("auto_delete_seconds", 600) if data else 600
 
 async def set_auto_delete_timer_db(seconds):
@@ -648,7 +647,22 @@ except Exception as e:
 
 # ---- BOT COMMANDS ----
 
-# 🔥 UPDATED START COMMAND (AUTO DELETE + FILE DELIVERY)
+# 🔥 HELPER FOR CAPTION GENERATION
+def generate_file_caption(details):
+    title = details.get("title") or details.get("name") or "Unknown"
+    year = (details.get("release_date") or details.get("first_air_date") or "----")[:4]
+    rating = f"{details.get('vote_average', 0):.1f}/10"
+    
+    if details.get('is_manual'):
+        genres = "Movie/Series"
+        lang = details.get("custom_language") or "N/A"
+    else:
+        genres = ", ".join([g['name'] for g in details.get('genres', [])][:3])
+        lang = details.get("custom_language") or "Dual Audio"
+    
+    return f"🎬 **{title} ({year})**\n━━━━━━━━━━━━━━━━━━━━━━━\n⭐ Rating: {rating}\n🎭 Genre: {genres}\n🔊 Language: {lang}\n\n🤖 Join: @{(bot.me).username}"
+
+# 🔥 UPDATED START COMMAND (AUTO DELETE + DETAILED CAPTION)
 @bot.on_message(filters.command("start") & filters.private)
 async def start_cmd(client, message):
     uid = message.from_user.id
@@ -659,7 +673,6 @@ async def start_cmd(client, message):
     if len(message.command) > 1:
         payload = message.command[1]
         if payload.startswith("get-"):
-            # Check for ban or authorization
             if await is_banned(uid):
                 return await message.reply_text("🚫 **Access Denied:** You are banned.")
 
@@ -670,21 +683,30 @@ async def start_cmd(client, message):
                 msg_id = int(payload.split("-")[1])
                 temp_msg = await message.reply_text("🔍 **Searching File...**")
                 
+                # 🔥 SMART CAPTION SEARCH
+                # ডাটাবেসে চেক করি এই ফাইলের জন্য কোনো মুভি ডিটেইলস আছে কিনা
+                post = await posts_col.find_one({"links.url": {"$regex": f"get-{msg_id}"}})
+                
+                final_caption = ""
+                if post and "details" in post:
+                    final_caption = generate_file_caption(post["details"])
+                else:
+                    final_caption = f"🎥 **Here is your file!**\n\n🤖 Powered by {client.me.mention}"
+
                 # Copy message from DB Channel to User
                 file_msg = await client.copy_message(
                     chat_id=uid,
                     from_chat_id=DB_CHANNEL_ID,
                     message_id=msg_id,
-                    caption=f"🎥 **Here is your file!**\n\n🤖 Powered by {client.me.mention}",
+                    caption=final_caption,
                     protect_content=True
                 )
                 
                 await temp_msg.delete()
 
-                # 🔥 AUTO DELETE LOGIC START 🔥
+                # 🔥 AUTO DELETE LOGIC
                 timer = await get_auto_delete_timer()
                 if timer > 0:
-                    # Time conversion for display
                     mins = timer // 60
                     time_str = f"{mins} মিনিট" if mins > 0 else f"{timer} সেকেন্ড"
 
@@ -693,11 +715,9 @@ async def start_cmd(client, message):
                         quote=True
                     )
                     
-                    # Background Task to delete both File and Warning message
                     asyncio.create_task(auto_delete_task(client, uid, [file_msg.id, warning_msg.id], timer))
-                # 🔥 AUTO DELETE LOGIC END 🔥
 
-                return # Stop here
+                return 
             except Exception as e:
                 logger.error(f"File Fetch Error: {e}")
                 return await message.reply_text("❌ **File Not Found!**\nIt might have been deleted or removed.")
@@ -788,7 +808,7 @@ async def set_share_cmd(client, message):
     except Exception as e:
         await message.reply_text(f"❌ Error: {e}")
 
-# 🔥 NEW: AUTO DELETE COMMAND
+# 🔥 AUTO DELETE COMMAND
 @bot.on_message(filters.command("setdel") & filters.user(OWNER_ID))
 async def set_auto_delete_cmd(client, message):
     try:
@@ -1250,5 +1270,5 @@ if __name__ == "__main__":
     ping_thread.daemon = True
     ping_thread.start()
     
-    print("🚀 Ultimate Bot Started (v42 - Auto Delete Active)!")
+    print("🚀 Ultimate Bot Started (v42 - Auto Delete + Smart Caption)!")
     bot.run()
