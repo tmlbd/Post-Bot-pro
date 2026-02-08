@@ -699,7 +699,7 @@ async def start_cmd(client, message):
                     from_chat_id=DB_CHANNEL_ID,
                     message_id=msg_id,
                     caption=final_caption,
-                    protect_content=True
+                    protect_content=False
                 )
                 
                 await temp_msg.delete()
