@@ -115,6 +115,27 @@ async def set_owner_ads_db(links):
         upsert=True
     )
 
+# 🔥 AUTO DELETE FUNCTIONS (NEW)
+async def get_auto_delete_timer():
+    data = await settings_col.find_one({"_id": "main_config"})
+    # Default 600 seconds (10 Minutes) if not set
+    return data.get("auto_delete_seconds", 600) if data else 600
+
+async def set_auto_delete_timer_db(seconds):
+    await settings_col.update_one(
+        {"_id": "main_config"}, 
+        {"$set": {"auto_delete_seconds": int(seconds)}}, 
+        upsert=True
+    )
+
+async def auto_delete_task(client, chat_id, message_ids, delay):
+    if delay <= 0: return
+    await asyncio.sleep(delay)
+    try:
+        await client.delete_messages(chat_id, message_ids)
+    except Exception as e:
+        logger.error(f"Auto Delete Error: {e}")
+
 # 🔥 REVENUE SHARE FUNCTIONS
 async def get_admin_share():
     data = await settings_col.find_one({"_id": "main_config"})
@@ -627,7 +648,7 @@ except Exception as e:
 
 # ---- BOT COMMANDS ----
 
-# 🔥 UPDATED START COMMAND (FILE DELIVERY + BENGALI TUTORIAL)
+# 🔥 UPDATED START COMMAND (AUTO DELETE + FILE DELIVERY)
 @bot.on_message(filters.command("start") & filters.private)
 async def start_cmd(client, message):
     uid = message.from_user.id
@@ -638,7 +659,7 @@ async def start_cmd(client, message):
     if len(message.command) > 1:
         payload = message.command[1]
         if payload.startswith("get-"):
-            # Check for ban or authorization if needed (Optional)
+            # Check for ban or authorization
             if await is_banned(uid):
                 return await message.reply_text("🚫 **Access Denied:** You are banned.")
 
@@ -650,15 +671,33 @@ async def start_cmd(client, message):
                 temp_msg = await message.reply_text("🔍 **Searching File...**")
                 
                 # Copy message from DB Channel to User
-                await client.copy_message(
+                file_msg = await client.copy_message(
                     chat_id=uid,
                     from_chat_id=DB_CHANNEL_ID,
                     message_id=msg_id,
                     caption=f"🎥 **Here is your file!**\n\n🤖 Powered by {client.me.mention}",
                     protect_content=True
                 )
+                
                 await temp_msg.delete()
-                return # Stop here, don't show welcome message
+
+                # 🔥 AUTO DELETE LOGIC START 🔥
+                timer = await get_auto_delete_timer()
+                if timer > 0:
+                    # Time conversion for display
+                    mins = timer // 60
+                    time_str = f"{mins} মিনিট" if mins > 0 else f"{timer} সেকেন্ড"
+
+                    warning_msg = await message.reply_text(
+                        f"⚠️ **সতর্কবার্তা:** কপিরাইট এড়াতে এই ফাইলটি **{time_str}** পর ডিলিট হয়ে যাবে!\n\n📥 দয়া করে এখনই ফাইলটি **Save** বা **Forward** করে রাখুন।",
+                        quote=True
+                    )
+                    
+                    # Background Task to delete both File and Warning message
+                    asyncio.create_task(auto_delete_task(client, uid, [file_msg.id, warning_msg.id], timer))
+                # 🔥 AUTO DELETE LOGIC END 🔥
+
+                return # Stop here
             except Exception as e:
                 logger.error(f"File Fetch Error: {e}")
                 return await message.reply_text("❌ **File Not Found!**\nIt might have been deleted or removed.")
@@ -720,7 +759,8 @@ async def bot_stats(client, message):
     total = await get_all_users_count()
     total_posts = await posts_col.count_documents({})
     admin_share = await get_admin_share()
-    await message.reply_text(f"📊 **BOT STATISTICS**\n\n👥 **Total Users:** {total}\n📂 **Total Posts Saved:** {total_posts}\n💰 **Admin Share:** {admin_share}%\n✅ **System:** Online")
+    auto_del = await get_auto_delete_timer()
+    await message.reply_text(f"📊 **BOT STATISTICS**\n\n👥 **Total Users:** {total}\n📂 **Total Posts Saved:** {total_posts}\n💰 **Admin Share:** {admin_share}%\n⏳ **Auto Delete:** {auto_del}s\n✅ **System:** Online")
 
 @bot.on_message(filters.command("setownerads") & filters.user(OWNER_ID))
 async def set_owner_ads_cmd(client, message):
@@ -747,6 +787,20 @@ async def set_share_cmd(client, message):
             await message.reply_text("⚠️ Please enter a number between 0 and 100.")
     except Exception as e:
         await message.reply_text(f"❌ Error: {e}")
+
+# 🔥 NEW: AUTO DELETE COMMAND
+@bot.on_message(filters.command("setdel") & filters.user(OWNER_ID))
+async def set_auto_delete_cmd(client, message):
+    try:
+        if len(message.command) < 2:
+            current = await get_auto_delete_timer()
+            return await message.reply_text(f"⚠️ Usage: `/setdel 600` (Seconds)\n\n🕒 **Current Timer:** {current} seconds")
+        
+        seconds = int(message.command[1])
+        await set_auto_delete_timer_db(seconds)
+        await message.reply_text(f"✅ **Auto Delete Timer Updated!**\n\nFiles will be deleted after **{seconds} seconds**.")
+    except ValueError:
+        await message.reply_text("❌ Please enter a valid number (seconds).")
 
 @bot.on_message(filters.command("broadcast") & filters.user(OWNER_ID))
 async def broadcast_msg(client, message):
@@ -927,7 +981,7 @@ async def on_select(client, cb):
 
 # ---- CONVERSATION HANDLER (MODIFIED FOR FILE STORE) ----
 # 🔥 Filters updated to accept VIDEO & DOCUMENT for File Store
-@bot.on_message(filters.private & (filters.text | filters.video | filters.document) & ~filters.command(["start", "post", "manual", "edit", "history", "setadlink", "mysettings", "auth", "ban", "stats", "broadcast", "setownerads", "setshare"]))
+@bot.on_message(filters.private & (filters.text | filters.video | filters.document) & ~filters.command(["start", "post", "manual", "edit", "history", "setadlink", "mysettings", "auth", "ban", "stats", "broadcast", "setownerads", "setshare", "setdel"]))
 async def text_handler(client, message):
     uid = message.from_user.id
     if uid not in user_conversations: return
@@ -1196,5 +1250,5 @@ if __name__ == "__main__":
     ping_thread.daemon = True
     ping_thread.start()
     
-    print("🚀 Ultimate Bot Started (v42 - Bengali Instructions + Revenue Share)!")
+    print("🚀 Ultimate Bot Started (v42 - Auto Delete Active)!")
     bot.run()
