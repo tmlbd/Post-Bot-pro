@@ -47,7 +47,7 @@ TMDB_API_KEY = os.getenv("TMDB_API_KEY")
 
 # 🔥 WEB DOMAIN CONFIG (নতুন যুক্ত করা হয়েছে)
 # .env ফাইলে WEB_URL না থাকলে ডিফল্ট localhost নিবে (যাতে error না আসে)
-WEB_URL = os.getenv("WEB_URL", "http://localhost:8080")
+WEB_URL = os.getenv("WEB_URL", "https://gorgeous-donetta-nahidcrk-7b84dba9.koyeb.app")
 
 # 🔥 ADMIN & DB CONFIG
 MONGO_URL = os.getenv("MONGO_URL") 
