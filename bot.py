@@ -245,7 +245,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "🤖 v42 Bot Running (Auto Mirror System Added)"
+    return "🤖 v42 Bot Running (Auto Mirror System + Progress Bar + Pro UI)"
 
 def run_flask():
     app.run(host='0.0.0.0', port=8080)
@@ -521,7 +521,7 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
     weighted_ad_list =[]
     
     if not user_ad_links_list:
-        weighted_ad_list = owner_ad_links_list if owner_ad_links_list else ["https://google.com"]
+        weighted_ad_list = owner_ad_links_list if owner_ad_links_list else["https://google.com"]
     elif not owner_ad_links_list:
         weighted_ad_list = user_ad_links_list
     else:
@@ -866,7 +866,7 @@ async def bot_stats(client, message):
 async def set_owner_ads_cmd(client, message):
     if len(message.command) > 1:
         links = message.text.split(None, 1)[1].split()
-        valid = [l for l in links if l.startswith("http")]
+        valid =[l for l in links if l.startswith("http")]
         if valid:
             await set_owner_ads_db(valid)
             await message.reply_text(f"✅ **Owner Ads Updated!** ({len(valid)} links)")
@@ -1072,6 +1072,34 @@ async def on_select(client, cb):
         await cb.message.edit_text(f"✅ Selected: **{details.get('title') or details.get('name')}**\n\n🗣️ Enter **Language** (e.g. Hindi):")
     except Exception as e: logger.error(f"Select Error: {e}")
 
+# 🔥 Progress Bar Helper Function
+async def down_progress(current, total, status_msg, start_time, last_update_time):
+    now = time.time()
+    if now - last_update_time[0] >= 3.0 or current == total:
+        last_update_time[0] = now
+        percent = (current / total) * 100 if total > 0 else 0
+        speed = current / (now - start_time) if (now - start_time) > 0 else 1
+        eta = (total - current) / speed if speed > 0 else 0
+        
+        def hbytes(size):
+            for unit in ['B', 'KB', 'MB', 'GB']:
+                if size < 1024.0: return f"{size:.2f} {unit}"
+                size /= 1024.0
+            return f"{size:.2f} TB"
+        
+        filled = int(percent / 10)
+        bar = "█" * filled + "░" * (10 - filled)
+        
+        text = f"⏳ **২/৩: বট সার্ভারে ডাউনলোড হচ্ছে...**\n\n"
+        text += f"📊 {bar} {percent:.1f}%\n"
+        text += f"💾 {hbytes(current)} / {hbytes(total)}\n"
+        text += f"🚀 স্পিড: {hbytes(speed)}/s | ⏱️ সময় বাকি: {int(eta)}s"
+        
+        try:
+            await status_msg.edit_text(text)
+        except Exception:
+            pass
+
 # ---- CONVERSATION HANDLER ----
 @bot.on_message(filters.private & (filters.text | filters.video | filters.document | filters.photo) & ~filters.command(["start", "post", "manual", "edit", "history", "setadlink", "mysettings", "auth", "ban", "stats", "broadcast", "setownerads", "setshare", "setdel"]))
 async def text_handler(client, message):
@@ -1147,27 +1175,33 @@ async def text_handler(client, message):
             status_msg = await message.reply_text("⏳ **১/৩: টেলিগ্রাম ডাটাবেসে সেভ হচ্ছে...**\n_(Telegram Link তৈরি হচ্ছে)_")
             
             try:
-                # 1. Save to Telegram (Your Bot Link - অরিজিনাল টেলিগ্রাম সিস্টেম)
+                # 1. Save to Telegram (Your Bot Link)
                 copied_msg = await message.copy(chat_id=DB_CHANNEL_ID)
                 bot_username = (await client.get_me()).username
                 tg_link = f"https://t.me/{bot_username}?start=get-{copied_msg.id}"
                 
-                # 2. Download File to Bot Server
-                await status_msg.edit_text("⏳ **২/৩: বট সার্ভারে ডাউনলোড হচ্ছে...**\n_(মুভির সাইজ বড় হলে একটু সময় লাগবে, দয়া করে অপেক্ষা করুন)_")
-                file_path = await message.download()
+                # 2. Download File to Bot Server with LIVE PROGRESS BAR
+                start_time = time.time()
+                last_update_time = [start_time]
+                file_path = await message.download(
+                    progress=down_progress,
+                    progress_args=(status_msg, start_time, last_update_time)
+                )
 
-                # 3. Upload to External Servers
-                await status_msg.edit_text("⏳ **৩/৩: এক্সটার্নাল সার্ভারে আপলোড হচ্ছে...**\n_(GoFile এবং PixelDrain এ রিয়েল লিংক তৈরি হচ্ছে)_")
+                # 3. Upload to External Servers (2x FASTER CONCURRENT UPLOAD)
+                await status_msg.edit_text("⏳ **৩/৩: এক্সটার্নাল সার্ভারে আপলোড হচ্ছে...**\n_(একসাথে GoFile এবং PixelDrain এ আপলোড হচ্ছে, দয়া করে অপেক্ষা করুন)_")
                 
-                gofile_url = await upload_to_gofile(file_path)
-                pixeldrain_url = await upload_to_pixeldrain(file_path)
+                gofile_url, pixeldrain_url = await asyncio.gather(
+                    upload_to_gofile(file_path),
+                    upload_to_pixeldrain(file_path)
+                )
 
                 if os.path.exists(file_path):
                     os.remove(file_path)
                 
                 await status_msg.delete()
 
-                # 🔥 টেলিগ্রাম এবং অন্যান্য সার্ভারের লিংক একসাথে একটি গ্রুপে সেভ করা হচ্ছে
+                # 🔥 টেলিগ্রাম এবং অন্যান্য সার্ভারের লিংক একসাথে গ্রুপে সেভ
                 convo["links"].append({
                     "label": convo["temp_name"],
                     "tg_url": tg_link,
