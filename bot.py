@@ -903,9 +903,21 @@ async def start_cmd(client, message):
         "👉 `/manual` - ম্যানুয়াল পোস্ট করতে\n"
         "👉 `/setapi doodstream <key>` - আর্নিং সাইট সেট করতে (Only Admin)\n"
         "👉 `/setadlink <লিংক>` - নিজের অ্যাড লিংক সেট করতে\n"
+        "👉 `/mysettings` - নিজের সেটিংস ও লিংক দেখতে\n"
+        "👉 `/cancel` - কোনো কাজ বাতিল করতে\n"
         "👉 `/edit <নাম বা ID>` - পোস্ট এডিট করতে"
     )
     await message.reply_text(welcome_text)
+
+# --- CANCEL COMMAND (NEW FIX) ---
+@bot.on_message(filters.command("cancel") & filters.private)
+async def cancel_cmd(client, message):
+    uid = message.from_user.id
+    if uid in user_conversations:
+        user_conversations.pop(uid, None)
+        await message.reply_text("✅ সব চলমান প্রসেস বাতিল করা হয়েছে। নতুন কমান্ড দিন।")
+    else:
+        await message.reply_text("⚠️ বাতিল করার মতো কোনো কাজ চলমান নেই।")
 
 # --- ADMIN COMMANDS ---
 @bot.on_message(filters.command("auth") & filters.user(OWNER_ID))
@@ -929,7 +941,9 @@ async def ban_user(client, message):
 @bot.on_message(filters.command("setownerads") & filters.user(OWNER_ID))
 async def set_owner_ads_cmd(client, message):
     if len(message.command) > 1:
-        valid =[l for l in message.text.split(None, 1)[1].split() if l.startswith("http")]
+        raw_links = message.text.split(None, 1)[1].split()
+        # FIX: http যুক্ত না থাকলে অটোমেটিক https যুক্ত করে নিবে
+        valid =[l if l.startswith("http") else "https://" + l for l in raw_links]
         if valid:
             await set_owner_ads_db(valid)
             await message.reply_text(f"✅ Owner Ads Updated! ({len(valid)} links)")
@@ -975,7 +989,7 @@ async def broadcast_msg(client, message):
             
     await msg.edit_text(f"✅ Broadcast Sent to **{count}** users.")
 
-# 🔥 API KEY MANAGER COMMAND (NEW)
+# 🔥 API KEY MANAGER COMMAND
 @bot.on_message(filters.command("setapi") & filters.user(OWNER_ID))
 async def set_api_command(client, message):
     try:
@@ -1011,6 +1025,25 @@ async def bot_stats(client, message):
         f"💰 Admin Share: {admin_share}%"
     )
 
+# --- MYSETTINGS COMMAND (NEW FIX) ---
+@bot.on_message(filters.command("mysettings") & filters.private)
+async def my_settings_cmd(client, message):
+    uid = message.from_user.id
+    if not await is_authorized(uid):
+        return await message.reply_text("🚫 **অ্যাক্সেস নেই**")
+        
+    user_ads = await get_user_ads(uid)
+    ads_text = "\n".join([f"🔗 {ad}" for ad in user_ads]) if user_ads else "❌ কোনো লিংক সেট করা নেই। (Owner Ads ব্যবহার হচ্ছে)"
+    
+    text = (
+        f"⚙️ **Your Settings**\n\n"
+        f"👤 **Name:** {message.from_user.first_name}\n"
+        f"🆔 **ID:** `{uid}`\n\n"
+        f"📢 **Your Ad Links:**\n{ads_text}\n\n"
+        f"💡 _Use /setadlink to update your ads._"
+    )
+    await message.reply_text(text, disable_web_page_preview=True)
+
 @bot.on_message(filters.command("setadlink") & filters.private)
 async def set_ad(client, message):
     uid = message.from_user.id
@@ -1018,12 +1051,14 @@ async def set_ad(client, message):
         return
         
     if len(message.command) > 1:
-        valid_links =[l for l in message.text.split(None, 1)[1].split() if l.startswith("http")]
+        raw_links = message.text.split(None, 1)[1].split()
+        # FIX: http যুক্ত না থাকলে অটোমেটিক https যুক্ত করে নিবে
+        valid_links =[l if l.startswith("http") else "https://" + l for l in raw_links]
         if valid_links:
             await save_user_ads(uid, valid_links)
             await message.reply_text("✅ Ad Links Saved!")
     else:
-        await message.reply_text("⚠️ Usage: `/setadlink https://site.com`")
+        await message.reply_text("⚠️ Usage: `/setadlink site.com`")
 
 @bot.on_message(filters.command("manual") & filters.private)
 async def manual_post_cmd(client, message):
@@ -1036,7 +1071,7 @@ async def manual_post_cmd(client, message):
         "links":[],
         "state": "manual_title"
     }
-    await message.reply_text("✍️ **Manual Post Started**\n\nপ্রথমে **টাইটেল (Title)** লিখুন:")
+    await message.reply_text("✍️ **Manual Post Started**\n\nপ্রথমে **টাইটেল (Title)** লিখুন:\n_(যেকোনো মুহূর্তে বাতিল করতে /cancel কমান্ড দিন)_")
 
 @bot.on_message(filters.command("history") & filters.private)
 async def history_cmd(client, message):
@@ -1182,7 +1217,8 @@ async def down_progress(current, total, status_msg, start_time, last_update_time
         except:
             pass
 
-@bot.on_message(filters.private & (filters.text | filters.video | filters.document | filters.photo) & ~filters.command(["start", "post", "manual", "edit", "history", "setadlink", "mysettings", "auth", "ban", "stats", "broadcast", "setownerads", "setshare", "setdel", "setapi"]))
+# FIX: Added "cancel" to the exception list of text_handler
+@bot.on_message(filters.private & (filters.text | filters.video | filters.document | filters.photo) & ~filters.command(["start", "post", "manual", "edit", "history", "setadlink", "mysettings", "auth", "ban", "stats", "broadcast", "setownerads", "setshare", "setdel", "setapi", "cancel"]))
 async def text_handler(client, message):
     uid = message.from_user.id
     if uid not in user_conversations:
@@ -1233,7 +1269,7 @@ async def text_handler(client, message):
             
             if ss_url:
                 if "manual_screenshots" not in convo["details"]:
-                    convo["details"]["manual_screenshots"] = []
+                    convo["details"]["manual_screenshots"] =[]
                 convo["details"]["manual_screenshots"].append(ss_url)
                 await msg.edit_text(f"✅ Screenshot Added!\nSend another or click DONE.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ DONE", callback_data=f"ss_done_{uid}")]]))
         except:
