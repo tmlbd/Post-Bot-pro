@@ -553,8 +553,12 @@ def apply_badge_to_poster(poster_bytes, text):
         box_h = text_h + (padding_y * 2)
         pos_x = (width - box_w) // 2
         
-        overlay = Image.new('RGBA', base_img.size, (0,0,0,0))
-        ImageDraw.Draw(overlay).rectangle(base_img = Image.alpha_composite(base_img, overlay)
+        # 🔥 FIX: Fixed the Syntax Error properly in this block
+        overlay = Image.new('RGBA', base_img.size, (0, 0, 0, 0))
+        draw_overlay = ImageDraw.Draw(overlay)
+        draw_overlay.rectangle([pos_x, pos_y, pos_x + box_w, pos_y + box_h], fill=(0, 0, 0, 150))
+        base_img = Image.alpha_composite(base_img, overlay)
+        
         draw = ImageDraw.Draw(base_img)
         cx = pos_x + padding_x
         cy = pos_y + padding_y - 12
@@ -873,7 +877,7 @@ def generate_formatted_caption(data, pid=None):
     else:
         year = (data.get("release_date") or data.get("first_air_date") or "----")[:4]
         rating = f"⭐ {data.get('vote_average', 0):.1f}/10"
-        genres = ", ".join([g["name"] for g in data.get("genres", [])] or ["N/A"])
+        genres = ", ".join([g["name"] for g in data.get("genres", [])] or["N/A"])
         language = data.get('custom_language', '').title()
     
     overview = data.get("overview", "No plot available.")
@@ -1271,6 +1275,7 @@ async def start_edit_session(uid, post, message):
         "post_id": post["_id"]
     }
     
+    # 🔥 FIX: Fixed bracket formatting properly
     btns = [[InlineKeyboardButton("➕ Add New Link", callback_data=f"add_lnk_edit_{uid}")],[InlineKeyboardButton("✅ Generate New Code", callback_data=f"gen_edit_{uid}")]
     ]
     txt = f"📝 **Editing:** {post['details'].get('title')}\n🆔 `{post['_id']}`\n\n👇 **What to do?**"
@@ -1530,7 +1535,9 @@ async def link_cb(client, cb):
         
     if action == "lnk_yes":
         user_conversations[uid]["state"] = "wait_link_name"
-        btns =[[InlineKeyboardButton("📁 Telegram", callback_data=f"setlname_telegram_{uid}"), InlineKeyboardButton("✍️ Custom", callback_data=f"setlname_custom_{uid}")]
+        # 🔥 FIX: Bracket properly formatted here
+        btns = [[InlineKeyboardButton("📁 Telegram", callback_data=f"setlname_telegram_{uid}"), 
+             InlineKeyboardButton("✍️ Custom", callback_data=f"setlname_custom_{uid}")]
         ]
         await cb.message.edit_text("👇 বাটনের নাম সিলেক্ট করুন:", reply_markup=InlineKeyboardMarkup(btns))
     else:
