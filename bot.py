@@ -83,6 +83,9 @@ DEFAULT_USER_AD_LINKS =["https://www.google.com", "https://www.bing.com"]
 
 user_conversations = {}
 
+# 🔥 BATCH UPLOAD QUEUE LIMITER (সার্ভার লোড এবং Flood Wait রোধ করতে)
+upload_semaphore = asyncio.Semaphore(2)
+
 # ---- DATABASE FUNCTIONS ----
 async def add_user(user_id, name):
     if not await users_col.find_one({"_id": user_id}):
@@ -373,7 +376,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "🤖 Ultimate SPA Bot Running (8 Servers + Filemoon + MixDrop)"
+    return "🤖 Ultimate SPA Bot Running (8 Servers + Filemoon + MixDrop + Batch Quality)"
 
 def run_flask():
     app.run(host='0.0.0.0', port=8080)
@@ -581,7 +584,7 @@ def apply_badge_to_poster(poster_bytes, text):
         return io.BytesIO(poster_bytes)
 
 # ============================================================================
-# 🔥 ADVANCED HTML GENERATOR (NEW AWESOME UI DESIGN)
+# 🔥 ADVANCED HTML GENERATOR (NEW AWESOME UI DESIGN WITH GROUPING)
 # ============================================================================
 def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, admin_share_percent=20):
     title = data.get("title") or data.get("name")
@@ -629,7 +632,7 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
     # 🔥 Screenshots Auto-Fetcher (TMDB Backdrops or Manual)
     screenshots = data.get('manual_screenshots',[])
     if not screenshots and not data.get('is_manual'):
-        backdrops = data.get('images', {}).get('backdrops', [])
+        backdrops = data.get('images', {}).get('backdrops',[])
         screenshots =[f"https://image.tmdb.org/t/p/w780{b['file_path']}" for b in backdrops[:6]] 
         
     ss_html = ""
@@ -642,59 +645,67 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
         </div>
         '''
 
-    # 🔥 GENERATE SERVER LIST (8 SERVERS SUPPORT)
+    # 🔥 GENERATE SERVER LIST (GROUPED BY QUALITY/EPISODE) 🔥
     server_list_html = ""
-    for idx, link in enumerate(links):
-        if link.get("is_grouped"):
-            
-            # Filemoon (Premium Stream)
-            if link.get('filemoon_url'):
-                fm_b64 = base64.b64encode(link['filemoon_url'].encode('utf-8')).decode('utf-8')
-                server_list_html += f'<button class="final-server-btn stream-btn" onclick="goToLink(\'{fm_b64}\')" style="background: #673AB7;">🎬 Watch on Filemoon (Premium)</button>'
-            
-            # MixDrop
-            if link.get('mixdrop_url'):
-                md_b64 = base64.b64encode(link['mixdrop_url'].encode('utf-8')).decode('utf-8')
-                server_list_html += f'<button class="final-server-btn stream-btn" onclick="goToLink(\'{md_b64}\')" style="background: #FFC107; color: #000;">⚡ MixDrop HD Stream</button>'
+    grouped_links = {}
+    for link in links:
+        lbl = link.get('label', 'Download Link')
+        if lbl not in grouped_links:
+            grouped_links[lbl] = []
+        grouped_links[lbl].append(link)
 
-            # DoodStream
-            if link.get('dood_url'):
-                dood_b64 = base64.b64encode(link['dood_url'].encode('utf-8')).decode('utf-8')
-                server_list_html += f'<button class="final-server-btn stream-btn" onclick="goToLink(\'{dood_b64}\')" style="background: #F57C00;">🎬 Watch on DoodStream</button>'
-            
-            # Streamtape
-            if link.get('stape_url'):
-                stape_b64 = base64.b64encode(link['stape_url'].encode('utf-8')).decode('utf-8')
-                server_list_html += f'<button class="final-server-btn stream-btn" onclick="goToLink(\'{stape_b64}\')" style="background: #E91E63;">🎥 Streamtape (HD Stream)</button>'
+    for lbl, grp in grouped_links.items():
+        server_list_html += f'<div class="quality-title">📺 {lbl}</div>\n<div class="server-grid">\n'
+        for link in grp:
+            if link.get("is_grouped"):
+                # Filemoon (Premium Stream)
+                if link.get('filemoon_url'):
+                    fm_b64 = base64.b64encode(link['filemoon_url'].encode('utf-8')).decode('utf-8')
+                    server_list_html += f'<button class="final-server-btn stream-btn" onclick="goToLink(\'{fm_b64}\')" style="background: #673AB7;">🎬 Watch on Filemoon</button>'
+                
+                # MixDrop
+                if link.get('mixdrop_url'):
+                    md_b64 = base64.b64encode(link['mixdrop_url'].encode('utf-8')).decode('utf-8')
+                    server_list_html += f'<button class="final-server-btn stream-btn" onclick="goToLink(\'{md_b64}\')" style="background: #FFC107; color: #000;">⚡ MixDrop HD</button>'
 
-            # GoFile
-            if link.get('gofile_url'):
-                go_b64 = base64.b64encode(link['gofile_url'].encode('utf-8')).decode('utf-8')
-                server_list_html += f'<button class="final-server-btn stream-btn" onclick="goToLink(\'{go_b64}\')">▶️ GoFile Fast Play</button>'
-            
-            # Telegram Server
-            tg_b64 = base64.b64encode(link['tg_url'].encode('utf-8')).decode('utf-8')
-            server_list_html += f'<button class="final-server-btn tg-btn" onclick="goToLink(\'{tg_b64}\')">✈️ Telegram Fast Server</button>'
-            
-            # FileDitch
-            if link.get('fileditch_url'):
-                fd_b64 = base64.b64encode(link['fileditch_url'].encode('utf-8')).decode('utf-8')
-                server_list_html += f'<button class="final-server-btn cloud-btn" onclick="goToLink(\'{fd_b64}\')" style="background: #009688;">☁️ Direct Cloud (15GB Max)</button>'
+                # DoodStream
+                if link.get('dood_url'):
+                    dood_b64 = base64.b64encode(link['dood_url'].encode('utf-8')).decode('utf-8')
+                    server_list_html += f'<button class="final-server-btn stream-btn" onclick="goToLink(\'{dood_b64}\')" style="background: #F57C00;">🎬 DoodStream</button>'
+                
+                # Streamtape
+                if link.get('stape_url'):
+                    stape_b64 = base64.b64encode(link['stape_url'].encode('utf-8')).decode('utf-8')
+                    server_list_html += f'<button class="final-server-btn stream-btn" onclick="goToLink(\'{stape_b64}\')" style="background: #E91E63;">🎥 Streamtape</button>'
 
-            # TmpFiles
-            if link.get('tmpfiles_url'):
-                tmp_b64 = base64.b64encode(link['tmpfiles_url'].encode('utf-8')).decode('utf-8')
-                server_list_html += f'<button class="final-server-btn cloud-btn" onclick="goToLink(\'{tmp_b64}\')" style="background: #6A1B9A;">🚀 High-Speed Server 1</button>'
+                # GoFile
+                if link.get('gofile_url'):
+                    go_b64 = base64.b64encode(link['gofile_url'].encode('utf-8')).decode('utf-8')
+                    server_list_html += f'<button class="final-server-btn stream-btn" onclick="goToLink(\'{go_b64}\')">▶️ GoFile Fast</button>'
+                
+                # Telegram Server
+                tg_b64 = base64.b64encode(link['tg_url'].encode('utf-8')).decode('utf-8')
+                server_list_html += f'<button class="final-server-btn tg-btn" onclick="goToLink(\'{tg_b64}\')">✈️ Telegram Fast</button>'
+                
+                # FileDitch
+                if link.get('fileditch_url'):
+                    fd_b64 = base64.b64encode(link['fileditch_url'].encode('utf-8')).decode('utf-8')
+                    server_list_html += f'<button class="final-server-btn cloud-btn" onclick="goToLink(\'{fd_b64}\')" style="background: #009688;">☁️ Direct Cloud</button>'
 
-            # PixelDrain
-            if link.get('pixel_url'):
-                px_b64 = base64.b64encode(link['pixel_url'].encode('utf-8')).decode('utf-8')
-                server_list_html += f'<button class="final-server-btn cloud-btn" onclick="goToLink(\'{px_b64}\')" style="background: #2E7D32;">⚡ Fast Server 2</button>'
-        else:
-            url_str = link.get('url', '')
-            encoded_url = base64.b64encode(url_str.encode('utf-8')).decode('utf-8')
-            label = link.get('label', 'Download Link')
-            server_list_html += f'<button class="final-server-btn tg-btn" onclick="goToLink(\'{encoded_url}\')">📥 {label}</button>'
+                # TmpFiles
+                if link.get('tmpfiles_url'):
+                    tmp_b64 = base64.b64encode(link['tmpfiles_url'].encode('utf-8')).decode('utf-8')
+                    server_list_html += f'<button class="final-server-btn cloud-btn" onclick="goToLink(\'{tmp_b64}\')" style="background: #6A1B9A;">🚀 High-Speed</button>'
+
+                # PixelDrain
+                if link.get('pixel_url'):
+                    px_b64 = base64.b64encode(link['pixel_url'].encode('utf-8')).decode('utf-8')
+                    server_list_html += f'<button class="final-server-btn cloud-btn" onclick="goToLink(\'{px_b64}\')" style="background: #2E7D32;">⚡ Fast Server 2</button>'
+            else:
+                url_str = link.get('url', '')
+                encoded_url = base64.b64encode(url_str.encode('utf-8')).decode('utf-8')
+                server_list_html += f'<button class="final-server-btn tg-btn" onclick="goToLink(\'{encoded_url}\')">📥 Download Link</button>'
+        server_list_html += '</div>\n'
 
     # 🔥 REVENUE SHARE LOGIC 🔥
     weighted_ad_list =[]
@@ -749,6 +760,10 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .success-title { color: #00e676; font-size: 18px; margin-bottom: 15px; border-bottom: 1px dashed #444; padding-bottom: 10px; font-weight: bold; }
         
+        /* 🔥 NEW QUALITY & SERVER GRID STYLE */
+        .quality-title { font-size: 16px; font-weight: bold; color: #00d2ff; margin-top: 20px; margin-bottom: 10px; background: rgba(0, 210, 255, 0.1); padding: 8px 12px; border-radius: 6px; text-align: left; border-left: 3px solid #00d2ff;}
+        .server-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 15px; }
+
         .server-list { display: flex; flex-direction: column; gap: 12px; margin-top: 15px; }
         .final-server-btn { width: 100%; padding: 14px; font-size: 14px; font-weight: 600; color: #fff; border: none; border-radius: 6px; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
         .stream-btn { background: #E50914; }
@@ -849,7 +864,7 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
         <!-- Unlocked Links Area -->
         <div id="view-links">
             <div class="success-title">✅ Links Unlocked!</div>
-            <p style="font-size: 14px; color: #bbb;">Please select a high-speed server below to stream or download.</p>
+            <p style="font-size: 14px; color: #bbb;">Please select a high-speed server or episode below to stream or download.</p>
             
             <div class="server-list">
                 {server_list_html}
@@ -955,7 +970,7 @@ def generate_image(data):
                 draw.text((480, 180), " | ".join([g["name"] for g in data.get("genres",[])]), font=get_font(18), fill="#00bcd4")
         
         overview = data.get("overview", "")
-        lines = [overview[i:i+80] for i in range(0, len(overview), 80)][:6]
+        lines =[overview[i:i+80] for i in range(0, len(overview), 80)][:6]
         y_text = 250
         for line in lines:
             draw.text((480, y_text), line, font=f_reg, fill="#E0E0E0")
@@ -1313,7 +1328,7 @@ async def post_cmd(client, message):
     if m_type and m_id:
         if m_type == "imdb":
             data = await fetch_url(f"https://api.themoviedb.org/3/find/{m_id}?api_key={TMDB_API_KEY}&external_source=imdb_id")
-            res = data.get("movie_results", []) + data.get("tv_results",[])
+            res = data.get("movie_results",[]) + data.get("tv_results",[])
             if res:
                 m_type, m_id = res[0]['media_type'], res[0]['id']
             else:
@@ -1366,6 +1381,69 @@ async def down_progress(current, total, status_msg, start_time, last_update_time
             await status_msg.edit_text(f"⏳ **২/৩: বট সার্ভারে ডাউনলোড হচ্ছে...**\n\n📊 {bar} {percent:.1f}%\n💾 {hbytes(current)} / {hbytes(total)}\n🚀 স্পিড: {hbytes(speed)}/s | ⏱️ সময় বাকি: {int(eta)}s")
         except:
             pass
+
+# 🔥 NEW HELPER FUNCTION FOR UPLOADING FILES (Allows Batch Queueing)
+async def process_file_upload(client, message, uid, temp_name):
+    async with upload_semaphore:
+        convo = user_conversations.get(uid)
+        if not convo:
+            return
+        
+        status_msg = await message.reply_text(f"⏳ **১/৩: টেলিগ্রাম ডাটাবেসে সেভ হচ্ছে...**\n({temp_name})", quote=True)
+        try:
+            copied_msg = await message.copy(chat_id=DB_CHANNEL_ID)
+            bot_username = (await client.get_me()).username
+            tg_link = f"https://t.me/{bot_username}?start=get-{copied_msg.id}"
+            
+            start_time = time.time()
+            last_update_time =[start_time]
+            file_path = await message.download(progress=down_progress, progress_args=(status_msg, start_time, last_update_time))
+
+            await status_msg.edit_text(f"⏳ **৩/৩: এক্সটার্নাল মাল্টি-সার্ভারে আপলোড হচ্ছে...**\n({temp_name})\n_(যেসকল API Key দেওয়া আছে, সেগুলোতেও প্যারালাল আপলোড হচ্ছে)_")
+            
+            # 🔥 ম্যাজিক: একসাথে ৮টি সার্ভারে প্যারালাল আপলোড (API না থাকলে স্কিপ হবে)
+            gofile_url, fileditch_url, tmpfiles_url, pixeldrain_url, dood_url, stape_url, filemoon_url, mixdrop_url = await asyncio.gather(
+                upload_to_gofile(file_path),
+                upload_to_fileditch(file_path),
+                upload_to_tmpfiles(file_path),
+                upload_to_pixeldrain(file_path),
+                upload_to_doodstream(file_path),
+                upload_to_streamtape(file_path),
+                upload_to_filemoon(file_path),
+                upload_to_mixdrop(file_path)
+            )
+
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                
+            await status_msg.delete()
+
+            convo["links"].append({
+                "label": temp_name,
+                "tg_url": tg_link,
+                "gofile_url": gofile_url,
+                "fileditch_url": fileditch_url,
+                "tmpfiles_url": tmpfiles_url,
+                "pixel_url": pixeldrain_url,
+                "dood_url": dood_url,
+                "stape_url": stape_url,
+                "filemoon_url": filemoon_url,
+                "mixdrop_url": mixdrop_url,
+                "is_grouped": True
+            })
+
+            # Check state so we only send options if NOT in batch mode
+            if convo["state"] == "wait_link_url":
+                if convo.get("post_id"):
+                     convo["state"] = "edit_mode"
+                     await message.reply_text(f"✅ **Saved 100% Genuinely!**", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Add Link", callback_data=f"add_lnk_edit_{uid}"), InlineKeyboardButton("✅ Finish", callback_data=f"gen_edit_{uid}")]]))
+                else:
+                    convo["state"] = "ask_links"
+                    await message.reply_text(f"✅ **Saved! Total: {len(convo['links'])}**", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Add Another", callback_data=f"lnk_yes_{uid}"), InlineKeyboardButton("🏁 Finish", callback_data=f"lnk_no_{uid}")]]))
+
+        except Exception as e:
+            logger.error(f"Upload Error: {e}")
+            await status_msg.edit_text(f"❌ Failed: {e}")
 
 @bot.on_message(filters.private & (filters.text | filters.video | filters.document | filters.photo) & ~filters.command(["start", "post", "manual", "edit", "history", "setadlink", "mysettings", "auth", "ban", "stats", "broadcast", "setownerads", "setshare", "setdel", "setapi", "cancel"]))
 async def text_handler(client, message):
@@ -1441,58 +1519,8 @@ async def text_handler(client, message):
         
     elif state == "wait_link_url":
         if message.video or message.document:
-            status_msg = await message.reply_text("⏳ **১/৩: টেলিগ্রাম ডাটাবেসে সেভ হচ্ছে...**")
-            try:
-                copied_msg = await message.copy(chat_id=DB_CHANNEL_ID)
-                bot_username = (await client.get_me()).username
-                tg_link = f"https://t.me/{bot_username}?start=get-{copied_msg.id}"
-                
-                start_time = time.time()
-                last_update_time =[start_time]
-                file_path = await message.download(progress=down_progress, progress_args=(status_msg, start_time, last_update_time))
-
-                await status_msg.edit_text("⏳ **৩/৩: এক্সটার্নাল মাল্টি-সার্ভারে আপলোড হচ্ছে...**\n_(যেসকল API Key দেওয়া আছে, সেগুলোতেও প্যারালাল আপলোড হচ্ছে)_")
-                
-                # 🔥 ম্যাজিক: একসাথে ৮টি সার্ভারে প্যারালাল আপলোড (API না থাকলে স্কিপ হবে)
-                gofile_url, fileditch_url, tmpfiles_url, pixeldrain_url, dood_url, stape_url, filemoon_url, mixdrop_url = await asyncio.gather(
-                    upload_to_gofile(file_path),
-                    upload_to_fileditch(file_path),
-                    upload_to_tmpfiles(file_path),
-                    upload_to_pixeldrain(file_path),
-                    upload_to_doodstream(file_path),
-                    upload_to_streamtape(file_path),
-                    upload_to_filemoon(file_path),
-                    upload_to_mixdrop(file_path)
-                )
-
-                if os.path.exists(file_path):
-                    os.remove(file_path)
-                    
-                await status_msg.delete()
-
-                convo["links"].append({
-                    "label": convo["temp_name"],
-                    "tg_url": tg_link,
-                    "gofile_url": gofile_url,
-                    "fileditch_url": fileditch_url,
-                    "tmpfiles_url": tmpfiles_url,
-                    "pixel_url": pixeldrain_url,
-                    "dood_url": dood_url,
-                    "stape_url": stape_url,
-                    "filemoon_url": filemoon_url,
-                    "mixdrop_url": mixdrop_url,
-                    "is_grouped": True
-                })
-
-                if convo.get("post_id"):
-                     convo["state"] = "edit_mode"
-                     await message.reply_text("✅ **Saved 100% Genuinely!**", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Add Link", callback_data=f"add_lnk_edit_{uid}"), InlineKeyboardButton("✅ Finish", callback_data=f"gen_edit_{uid}")]]))
-                else:
-                    convo["state"] = "ask_links"
-                    await message.reply_text(f"✅ **Saved! Total: {len(convo['links'])}**", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Add Another", callback_data=f"lnk_yes_{uid}"), InlineKeyboardButton("🏁 Finish", callback_data=f"lnk_no_{uid}")]]))
-            except Exception as e:
-                logger.error(f"Upload Error: {e}")
-                await status_msg.edit_text(f"❌ Failed: {e}")
+            # We use the new async helper to process this without completely blocking text_handler
+            asyncio.create_task(process_file_upload(client, message, uid, convo["temp_name"]))
 
         elif text.startswith("http"):
             convo["links"].append({"label": convo["temp_name"], "url": text, "is_grouped": False})
@@ -1504,7 +1532,25 @@ async def text_handler(client, message):
                 await message.reply_text(f"✅ Saved! Total: {len(convo['links'])}", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Add Another", callback_data=f"lnk_yes_{uid}"), InlineKeyboardButton("🏁 Finish", callback_data=f"lnk_no_{uid}")]]))
         else:
             await message.reply_text("⚠️ Invalid Input. URL or File required.")
-    
+
+    # 🔥 NEW BATCH HANDLER
+    elif state == "wait_batch_files":
+        if text.lower() == "/done":
+            if convo.get("post_id"):
+                 convo["state"] = "edit_mode"
+                 await message.reply_text(f"✅ **Batch Upload Finished! Total Files: {len(convo['links'])}**", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Add Link", callback_data=f"add_lnk_edit_{uid}"), InlineKeyboardButton("✅ Finish", callback_data=f"gen_edit_{uid}")]]))
+            else:
+                convo["state"] = "ask_links"
+                await message.reply_text(f"✅ **Batch Upload Finished! Total Files: {len(convo['links'])}**", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Add Another", callback_data=f"lnk_yes_{uid}"), InlineKeyboardButton("🏁 Finish", callback_data=f"lnk_no_{uid}")]]))
+        elif message.video or message.document:
+            file_name = getattr(message.video, "file_name", None) or getattr(message.document, "file_name", None)
+            if not file_name:
+                file_name = f"Episode {len(convo['links']) + 1}"
+            
+            asyncio.create_task(process_file_upload(client, message, uid, file_name))
+        else:
+            await message.reply_text("⚠️ দয়া করে ভিডিও/ফাইল দিন অথবা শেষ হলে /done লিখুন।")
+
     elif state == "wait_badge_text":
         convo["details"]["badge_text"] = text
         await message.reply_text("🛡️ **Safety Check:**", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Safe", callback_data=f"safe_yes_{uid}"), InlineKeyboardButton("🔞 18+", callback_data=f"safe_no_{uid}")]]))
@@ -1535,11 +1581,10 @@ async def link_cb(client, cb):
         
     if action == "lnk_yes":
         user_conversations[uid]["state"] = "wait_link_name"
-        # 🔥 FIX: Bracket properly formatted here
         btns = [[InlineKeyboardButton("📁 Telegram", callback_data=f"setlname_telegram_{uid}"), 
-             InlineKeyboardButton("✍️ Custom", callback_data=f"setlname_custom_{uid}")]
+             InlineKeyboardButton("✍️ Custom", callback_data=f"setlname_custom_{uid}")],[InlineKeyboardButton("📦 Batch Upload (Series)", callback_data=f"setlname_batch_{uid}")]
         ]
-        await cb.message.edit_text("👇 বাটনের নাম সিলেক্ট করুন:", reply_markup=InlineKeyboardMarkup(btns))
+        await cb.message.edit_text("👇 বাটনের ধরন সিলেক্ট করুন:", reply_markup=InlineKeyboardMarkup(btns))
     else:
         user_conversations[uid]["state"] = "wait_badge_text"
         await cb.message.edit_text("🖼️ **Badge Text?**\n\nলিখে পাঠান অথবা Skip করুন:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🚫 Skip", callback_data=f"skip_badge_{uid}")]]))
@@ -1549,7 +1594,10 @@ async def add_lnk_edit(client, cb):
     uid = int(cb.data.split("_")[-1])
     if uid in user_conversations:
         user_conversations[uid]["state"] = "wait_link_name"
-        await cb.message.edit_text("👇 বাটন সিলেক্ট করুন:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📁 Telegram", callback_data=f"setlname_telegram_{uid}"), InlineKeyboardButton("✍️ Custom", callback_data=f"setlname_custom_{uid}")]]))
+        btns = [[InlineKeyboardButton("📁 Telegram", callback_data=f"setlname_telegram_{uid}"), 
+             InlineKeyboardButton("✍️ Custom", callback_data=f"setlname_custom_{uid}")],[InlineKeyboardButton("📦 Batch Upload (Series)", callback_data=f"setlname_batch_{uid}")]
+        ]
+        await cb.message.edit_text("👇 বাটনের ধরন সিলেক্ট করুন:", reply_markup=InlineKeyboardMarkup(btns))
 
 @bot.on_callback_query(filters.regex("^setlname_"))
 async def set_lname_cb(client, cb):
@@ -1561,7 +1609,10 @@ async def set_lname_cb(client, cb):
         
     if action == "custom":
         user_conversations[uid]["state"] = "wait_link_name_custom"
-        await cb.message.edit_text("📝 কাস্টম বাটনের নাম লিখুন:")
+        await cb.message.edit_text("📝 কাস্টম বাটনের নাম লিখুন (যেমন: 1080p, 720p বা Ep-01):")
+    elif action == "batch":
+        user_conversations[uid]["state"] = "wait_batch_files"
+        await cb.message.edit_text("📦 **Batch Mode:**\n\nআপনার সিরিজের সব ফাইল বা এপিসোড একসাথে ফরোয়ার্ড করুন।\nফাইলের নামগুলোই এপিসোড নাম হিসেবে সেট হবে।\nসব দেওয়া হলে টাইপ করুন: `/done`")
     else:
         user_conversations[uid]["temp_name"] = "Telegram Files"
         user_conversations[uid]["state"] = "wait_link_url"
