@@ -583,13 +583,24 @@ def apply_badge_to_poster(poster_bytes, text):
         return io.BytesIO(poster_bytes)
 
 # ============================================================================
-# 🔥 ADVANCED HTML GENERATOR (NEW AWESOME UI DESIGN WITH GROUPING)
+# 🔥 ADVANCED HTML GENERATOR (NEW AWESOME UI DESIGN WITH GROUPING + EMBED PLAYER + THEMES)
 # ============================================================================
 def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, admin_share_percent=20):
     title = data.get("title") or data.get("name")
     overview = data.get("overview", "No plot available.")
     poster = data.get('manual_poster_url') or f"https://image.tmdb.org/t/p/w500{data.get('poster_path')}"
     BTN_TELEGRAM = "https://i.ibb.co/kVfJvhzS/photo-2025-12-23-12-38-56-7587031987190235140.jpg"
+
+    # 🔥 Theme CSS Switcher Logic
+    theme = data.get("theme", "netflix")
+    if theme == "netflix":
+        root_css = "--bg-color: #0f0f13; --box-bg: #1a1a24; --text-main: #ffffff; --text-muted: #d1d1d1; --primary: #E50914; --accent: #00d2ff; --border: #2a2a35; --btn-grad: linear-gradient(90deg, #E50914 0%, #ff5252 100%); --btn-shadow: 0 4px 15px rgba(229, 9, 20, 0.4);"
+    elif theme == "prime":
+        root_css = "--bg-color: #0f171e; --box-bg: #1b2530; --text-main: #ffffff; --text-muted: #8197a4; --primary: #00A8E1; --accent: #00A8E1; --border: #2c3e50; --btn-grad: linear-gradient(90deg, #00A8E1 0%, #00d2ff 100%); --btn-shadow: 0 4px 15px rgba(0, 168, 225, 0.4);"
+    elif theme == "light":
+        root_css = "--bg-color: #f4f4f9; --box-bg: #ffffff; --text-main: #333333; --text-muted: #555555; --primary: #6200ea; --accent: #6200ea; --border: #dddddd; --btn-grad: linear-gradient(90deg, #6200ea 0%, #b388ff 100%); --btn-shadow: 0 4px 15px rgba(98, 0, 234, 0.4);"
+    else:
+        root_css = "--bg-color: #0f0f13; --box-bg: #1a1a24; --text-main: #ffffff; --text-muted: #d1d1d1; --primary: #E50914; --accent: #00d2ff; --border: #2a2a35; --btn-grad: linear-gradient(90deg, #E50914 0%, #ff5252 100%); --btn-shadow: 0 4px 15px rgba(229, 9, 20, 0.4);"
 
     # Extract all necessary movie data
     lang_str = data.get('custom_language', 'Dual Audio').strip()
@@ -642,6 +653,41 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
         <div class="screenshot-grid">
             {ss_imgs}
         </div>
+        '''
+
+    # 🔥 NEW EMBED PLAYER & SERVER SWITCHER LOGIC 🔥
+    embed_links =[]
+    for link in links:
+        if link.get("is_grouped"):
+            if link.get('filemoon_url'):
+                embed_links.append({'name': 'Filemoon', 'url': link['filemoon_url']})
+            if link.get('mixdrop_url'):
+                m_url = link['mixdrop_url']
+                if m_url.startswith("//"): m_url = "https:" + m_url
+                embed_links.append({'name': 'MixDrop', 'url': m_url})
+            if link.get('dood_url'):
+                embed_links.append({'name': 'DoodStream', 'url': link['dood_url']})
+            if link.get('stape_url'):
+                embed_links.append({'name': 'Streamtape', 'url': link['stape_url']})
+
+    embed_html = ""
+    if embed_links:
+        default_embed = embed_links[0]['url']
+        server_btns = ""
+        for i, el in enumerate(embed_links):
+            b64_url = base64.b64encode(el['url'].encode('utf-8')).decode('utf-8')
+            active_class = 'active' if i == 0 else ''
+            server_btns += f'<button class="server-tab {active_class}" onclick="changeServer(\'{b64_url}\', this)">📺 {el["name"]}</button>'
+            
+        embed_html = f'''
+        <div class="section-title">🍿 Watch Online (Live Player)</div>
+        <div class="embed-container">
+            <iframe id="main-embed-player" src="{default_embed}" allowfullscreen="true" frameborder="0"></iframe>
+        </div>
+        <div class="server-switcher">
+            {server_btns}
+        </div>
+        <hr style="border-top: 1px dashed var(--border); margin: 20px 0;">
         '''
 
     # 🔥 GENERATE SERVER LIST (GROUPED BY QUALITY/EPISODE) 🔥
@@ -708,55 +754,63 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
             
     random.shuffle(weighted_ad_list) 
 
-    style_html = """
+    style_html = f"""
     <style>
-        .app-wrapper { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f0f13; border: 1px solid #2a2a35; border-radius: 12px; max-width: 650px; margin: 20px auto; padding: 20px; color: #fff; box-sizing: border-box; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        .app-wrapper * { box-sizing: border-box; }
+        :root {{ {root_css} }}
+        .app-wrapper {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg-color); border: 1px solid var(--border); border-radius: 12px; max-width: 650px; margin: 20px auto; padding: 20px; color: var(--text-main); box-sizing: border-box; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }}
+        .app-wrapper * {{ box-sizing: border-box; }}
         
-        .movie-title { color: #00d2ff; font-size: 24px; font-weight: bold; text-align: center; margin-bottom: 20px; line-height: 1.4; text-shadow: 1px 1px 5px rgba(0,0,0,0.8); }
+        .movie-title {{ color: var(--accent); font-size: 24px; font-weight: bold; text-align: center; margin-bottom: 20px; line-height: 1.4; text-shadow: 1px 1px 5px rgba(0,0,0,0.3); }}
         
-        .info-box { display: flex; flex-direction: row; background: #1a1a24; border: 1px solid #333; border-radius: 12px; padding: 15px; gap: 20px; margin-bottom: 20px; align-items: center; }
-        @media (max-width: 480px) { .info-box { flex-direction: column; text-align: center; } }
+        .info-box {{ display: flex; flex-direction: row; background: var(--box-bg); border: 1px solid var(--border); border-radius: 12px; padding: 15px; gap: 20px; margin-bottom: 20px; align-items: center; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }}
+        @media (max-width: 480px) {{ .info-box {{ flex-direction: column; text-align: center; }} }}
         
-        .info-poster img { width: 150px; border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); border: 2px solid #222; }
+        .info-poster img {{ width: 150px; border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); border: 2px solid var(--border); }}
         
-        .info-text { flex: 1; text-align: left; font-size: 14px; color: #d1d1d1; line-height: 1.7; }
-        .info-text span { color: #00e676; font-weight: bold; }
+        .info-text {{ flex: 1; text-align: left; font-size: 14px; color: var(--text-muted); line-height: 1.7; }}
+        .info-text span {{ color: var(--primary); font-weight: bold; }}
         
-        .section-title { font-size: 18px; color: #fff; margin: 20px 0 10px; border-bottom: 2px solid #ff0844; display: inline-block; padding-bottom: 5px; font-weight: bold; }
+        .section-title {{ font-size: 18px; color: var(--text-main); margin: 20px 0 10px; border-bottom: 2px solid var(--primary); display: inline-block; padding-bottom: 5px; font-weight: bold; }}
         
-        .plot-box { background: rgba(255,255,255,0.03); padding: 15px; border-left: 4px solid #00d2ff; border-radius: 4px; font-size: 14px; color: #bbb; margin-bottom: 20px; line-height: 1.6; text-align: justify; }
+        .plot-box {{ background: rgba(0,0,0,0.05); padding: 15px; border-left: 4px solid var(--primary); border-radius: 4px; font-size: 14px; color: var(--text-muted); margin-bottom: 20px; line-height: 1.6; text-align: justify; border: 1px solid var(--border); }}
         
-        .video-container { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 10px; margin-bottom: 20px; border: 1px solid #333; }
-        .video-container iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; }
+        .video-container {{ position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 10px; margin-bottom: 20px; border: 1px solid var(--border); }}
+        .video-container iframe {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; }}
         
-        .screenshot-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 25px; }
-        .screenshot-grid img { width: 100%; border-radius: 8px; border: 1px solid #444; transition: transform 0.3s; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
-        .screenshot-grid img:hover { transform: scale(1.05); z-index: 10; cursor: pointer; }
+        .screenshot-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 25px; }}
+        .screenshot-grid img {{ width: 100%; border-radius: 8px; border: 1px solid var(--border); transition: transform 0.3s; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }}
+        .screenshot-grid img:hover {{ transform: scale(1.05); z-index: 10; cursor: pointer; }}
         
-        .action-grid { display: flex; flex-direction: column; gap: 15px; margin-top: 20px; }
-        .main-btn { width: 100%; padding: 16px; font-size: 16px; font-weight: bold; text-transform: uppercase; color: #fff; border: none; border-radius: 8px; cursor: pointer; transition: 0.3s; display: flex; justify-content: center; align-items: center; gap: 10px; letter-spacing: 1px; }
-        .btn-watch { background: linear-gradient(90deg, #ff0844 0%, #ffb199 100%); box-shadow: 0 4px 15px rgba(255, 8, 68, 0.4); }
-        .btn-download { background: linear-gradient(90deg, #00C9FF 0%, #92FE9D 100%); color: #000; box-shadow: 0 4px 15px rgba(0, 201, 255, 0.4); }
-        .main-btn:disabled { filter: grayscale(1); cursor: not-allowed; opacity: 0.8; }
+        .action-grid {{ display: flex; flex-direction: column; gap: 15px; margin-top: 20px; }}
+        .main-btn {{ width: 100%; padding: 16px; font-size: 16px; font-weight: bold; text-transform: uppercase; color: #fff; border: none; border-radius: 8px; cursor: pointer; transition: 0.3s; display: flex; justify-content: center; align-items: center; gap: 10px; letter-spacing: 1px; }}
+        .btn-watch {{ background: var(--btn-grad); box-shadow: var(--btn-shadow); }}
+        .btn-download {{ background: linear-gradient(90deg, #00C9FF 0%, #92FE9D 100%); color: #000; box-shadow: 0 4px 15px rgba(0, 201, 255, 0.4); }}
+        .main-btn:disabled {{ filter: grayscale(1); cursor: not-allowed; opacity: 0.8; }}
         
-        #view-links { display: none; background: #1a1a24; padding: 20px; border-radius: 10px; border: 1px solid #333; text-align: center; animation: fadeIn 0.5s ease-in-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .success-title { color: #00e676; font-size: 18px; margin-bottom: 15px; border-bottom: 1px dashed #444; padding-bottom: 10px; font-weight: bold; }
+        #view-links {{ display: none; background: var(--box-bg); padding: 20px; border-radius: 10px; border: 1px solid var(--border); text-align: center; animation: fadeIn 0.5s ease-in-out; }}
+        @keyframes fadeIn {{ from {{ opacity: 0; transform: translateY(10px); }} to {{ opacity: 1; transform: translateY(0); }} }}
+        .success-title {{ color: #00e676; font-size: 18px; margin-bottom: 15px; border-bottom: 1px dashed var(--border); padding-bottom: 10px; font-weight: bold; }}
         
         /* 🔥 NEW QUALITY & SERVER GRID STYLE */
-        .quality-title { font-size: 16px; font-weight: bold; color: #00d2ff; margin-top: 20px; margin-bottom: 10px; background: rgba(0, 210, 255, 0.1); padding: 8px 12px; border-radius: 6px; text-align: left; border-left: 3px solid #00d2ff;}
-        .server-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 15px; }
+        .quality-title {{ font-size: 16px; font-weight: bold; color: var(--accent); margin-top: 20px; margin-bottom: 10px; background: rgba(0,0,0, 0.1); padding: 8px 12px; border-radius: 6px; text-align: left; border-left: 3px solid var(--accent); border: 1px solid var(--border); }}
+        .server-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 15px; }}
 
-        .server-list { display: flex; flex-direction: column; gap: 12px; margin-top: 15px; }
-        .final-server-btn { width: 100%; padding: 14px; font-size: 14px; font-weight: 600; color: #fff; border: none; border-radius: 6px; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
-        .stream-btn { background: #E50914; }
-        .tg-btn { background: #0088cc; }
-        .cloud-btn { background: #4caf50; }
-        .final-server-btn:hover { filter: brightness(1.2); transform: scale(1.02); }
+        .server-list {{ display: flex; flex-direction: column; gap: 12px; margin-top: 15px; }}
+        .final-server-btn {{ width: 100%; padding: 14px; font-size: 14px; font-weight: 600; color: #fff; border: none; border-radius: 6px; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }}
+        .stream-btn {{ background: var(--primary); }}
+        .tg-btn {{ background: #0088cc; }}
+        .cloud-btn {{ background: #4caf50; }}
+        .final-server-btn:hover {{ filter: brightness(1.2); transform: scale(1.02); }}
         
-        .promo-box { margin-top: 25px; text-align: center; }
-        .promo-box img { width: 100%; max-width: 300px; border-radius: 20px; }
+        /* 🔥 EMBED PLAYER STYLES */
+        .embed-container {{ position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 10px; border: 2px solid var(--border); margin-bottom: 15px; background: #000; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }}
+        .embed-container iframe {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; }}
+        .server-switcher {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; justify-content: center; }}
+        .server-tab {{ background: var(--bg-color); color: var(--text-main); border: 1px solid var(--border); padding: 8px 15px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: bold; transition: 0.3s; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }}
+        .server-tab:hover, .server-tab.active {{ background: var(--primary); color: #fff; border-color: var(--primary); }}
+
+        .promo-box {{ margin-top: 25px; text-align: center; }}
+        .promo-box img {{ width: 100%; max-width: 300px; border-radius: 20px; border: 1px solid var(--border); }}
     </style>
     """
 
@@ -789,6 +843,15 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
     function goToLink(b64Url) {{
         let realUrl = atob(b64Url);
         window.location.href = realUrl;
+    }}
+    
+    function changeServer(b64Url, btn) {{
+        let realUrl = atob(b64Url);
+        document.getElementById('main-embed-player').src = realUrl;
+        
+        let tabs = document.querySelectorAll('.server-tab');
+        tabs.forEach(t => t.classList.remove('active'));
+        btn.classList.add('active');
     }}
     </script>
     """
@@ -829,26 +892,31 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
             {ss_html}
             
             <!-- Download Section -->
-            <div class="section-title">📥 Links & Downloads</div>
-            <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 6px; font-size: 13px; text-align: center; margin-bottom: 15px; color: #ccc;">
-                ℹ️ <b>How to Download:</b> Click any button below, wait 5 seconds, and the Server List will unlock automatically.
+            <div class="section-title">📥 Links & Player</div>
+            <div style="background: rgba(0,0,0,0.1); padding: 12px; border-radius: 6px; font-size: 13px; text-align: center; margin-bottom: 15px; color: var(--text-muted); border: 1px solid var(--border);">
+                ℹ️ <b>How to Watch/Download:</b> Click any button below, wait 5 seconds, and the Live Player & Server List will unlock automatically.
             </div>
             
             <div class="action-grid">
                 <button class="main-btn btn-watch" onclick="startUnlock(this, 'watch')">
-                    ▶️ STREAM ONLINE
+                    ▶️ WATCH ONLINE (LIVE PLAYER)
                 </button>
                 <button class="main-btn btn-download" onclick="startUnlock(this, 'download')">
-                    📥 DOWNLOAD FILES
+                    📥 DOWNLOAD FILES & LINKS
                 </button>
             </div>
             
         </div>
         
-        <!-- Unlocked Links Area -->
+        <!-- Unlocked Links & Player Area -->
         <div id="view-links">
-            <div class="success-title">✅ Links Unlocked!</div>
-            <p style="font-size: 14px; color: #bbb;">Please select a high-speed server or episode below to stream or download.</p>
+            <div class="success-title">✅ Successfully Unlocked!</div>
+            
+            <!-- 🔥 NEW EMBED PLAYER SECTION 🔥 -->
+            {embed_html}
+            
+            <div class="section-title">📥 Download Links</div>
+            <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 15px;">Please select a high-speed server or episode below to download.</p>
             
             <div class="server-list">
                 {server_list_html}
@@ -876,7 +944,7 @@ def generate_formatted_caption(data, pid=None):
     else:
         year = (data.get("release_date") or data.get("first_air_date") or "----")[:4]
         rating = f"⭐ {data.get('vote_average', 0):.1f}/10"
-        genres = ", ".join([g["name"] for g in data.get("genres", [])] or["N/A"])
+        genres = ", ".join([g["name"] for g in data.get("genres",[])] or["N/A"])
         language = data.get('custom_language', '').title()
     
     overview = data.get("overview", "No plot available.")
@@ -1640,6 +1708,7 @@ async def skip_badge_cb(client, cb):
         user_conversations[uid]["details"]["badge_text"] = None
         await cb.message.edit_text("🛡️ **Safety Check:**", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ Safe", callback_data=f"safe_yes_{uid}"), InlineKeyboardButton("🔞 18+", callback_data=f"safe_no_{uid}")]]))
 
+# 🔥 THEME SELECTION & SAFETY CHECK OVERRIDE
 @bot.on_callback_query(filters.regex("^safe_"))
 async def safety_cb(client, cb):
     try:
@@ -1649,6 +1718,21 @@ async def safety_cb(client, cb):
         return
         
     user_conversations[uid]["details"]["force_adult"] = True if action == "safe_no" else False
+    
+    # Ask for Theme before Generating Post
+    btns = [[InlineKeyboardButton("🔴 Netflix (Dark)", callback_data=f"theme_netflix_{uid}")],[InlineKeyboardButton("🔵 Prime (Blue)", callback_data=f"theme_prime_{uid}")],[InlineKeyboardButton("⚪ Anime (Light)", callback_data=f"theme_light_{uid}")]
+    ]
+    await cb.message.edit_text("🎨 **ওয়েবসাইটের থিম (Theme) সিলেক্ট করুন:**", reply_markup=InlineKeyboardMarkup(btns))
+
+@bot.on_callback_query(filters.regex("^theme_"))
+async def theme_cb(client, cb):
+    try:
+        _, theme_name, uid = cb.data.split("_")
+        uid = int(uid)
+    except:
+        return
+    
+    user_conversations[uid]["details"]["theme"] = theme_name
     await generate_final_post(client, uid, cb.message)
 
 async def generate_final_post(client, uid, message):
