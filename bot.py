@@ -58,7 +58,8 @@ LOG_CHANNEL_ID = int(os.getenv("LOG_CHANNEL_ID", 0))
 
 # 🔥 ফাইল স্টোর চ্যানেল (অবশ্যই -100 দিয়ে শুরু হতে হবে)
 DB_CHANNEL_ID = int(os.getenv("DB_CHANNEL_ID", 0)) 
-
+# --- WORKER GLOBAL VARIABLE ---
+worker_client = None
 # Check Variables
 if not all([BOT_TOKEN, API_ID, API_HASH, TMDB_API_KEY, MONGO_URL]):
     logger.critical("❌ FATAL ERROR: Variables missing in .env file!")
@@ -169,7 +170,25 @@ async def save_user_ads(user_id, links):
 
 async def get_all_users_count():
     return await users_col.count_documents({})
+# --- WORKER DB & INIT FUNCTIONS ---
+async def get_worker_session():
+    data = await settings_col.find_one({"_id": "worker_config"})
+    return data.get("session_string") if data else None
 
+async def set_worker_session_db(session_string):
+    await settings_col.update_one({"_id": "worker_config"}, {"$set": {"session_string": session_string}}, upsert=True)
+
+async def start_worker():
+    global worker_client
+    session = await get_worker_session()
+    if session:
+        try:
+            worker_client = Client("worker_session", session_string=session, api_id=int(API_ID), api_hash=API_HASH)
+            await worker_client.start()
+            logger.info("✅ Worker Session Started!")
+        except Exception as e:
+            logger.error(f"❌ Worker Error: {e}")
+            worker_client = None
 # 🔥 DYNAMIC API KEY MANAGER
 async def get_server_api(server_name):
     data = await settings_col.find_one({"_id": "api_keys"})
@@ -1231,7 +1250,32 @@ async def set_api_command(client, message):
         await message.reply_text(f"✅ **{server_name.title()}** API Key Saved successfully!")
     except Exception as e:
         await message.reply_text(f"❌ Error: {e}")
+# --- WORKER COMMANDS ---
+@bot.on_message(filters.command("setworker") & filters.user(OWNER_ID))
+async def set_worker_cmd(client, message):
+    global worker_client
+    if len(message.command) < 2:
+        return await message.reply_text("⚠️ **Format:** `/setworker SESSION_STRING`")
+    session_string = message.text.split(None, 1)[1]
+    await set_worker_session_db(session_string)
+    await message.reply_text("⏳ সেশন সেভ হয়েছে, ওয়ার্কার রিস্টার্ট হচ্ছে...")
+    if worker_client:
+        try: await worker_client.stop()
+        except: pass
+    try:
+        worker_client = Client("worker_session", session_string=session_string, api_id=int(API_ID), api_hash=API_HASH)
+        await worker_client.start()
+        await message.reply_text("✅ **Worker Session** সফলভাবে কানেক্ট হয়েছে!")
+    except Exception as e:
+        await message.reply_text(f"❌ কানেকশন ফেইলড: {e}")
 
+@bot.on_message(filters.command("workerinfo") & filters.user(OWNER_ID))
+async def worker_info(client, message):
+    if worker_client and worker_client.is_connected:
+        me = await worker_client.get_me()
+        await message.reply_text(f"🤖 **Worker Status:** Active\n👤 **Name:** {me.first_name}\n🆔 **ID:** `{me.id}`")
+    else:
+        await message.reply_text("❌ Worker Session কানেক্টেড নেই।")
 # --- USER COMMANDS ---
 @bot.on_message(filters.command("stats") & filters.user(OWNER_ID))
 async def bot_stats(client, message):
@@ -1438,6 +1482,62 @@ async def down_progress(current, total, status_msg, start_time, last_update_time
 
 # 🔥 BACKGROUND ASYNC UPLOAD (ALLOWS MULTIPLE AT ONCE)
 async def process_file_upload(client, message, uid, temp_name):
+    convo = user_conversations.get(uid)
+    if not convo: return
+    
+    convo["pending_uploads"] = convo.get("pending_uploads", 0) + 1
+    status_msg = await message.reply_text(f"🕒 **সারির অপেক্ষায়...**\n({temp_name})", quote=True)
+    
+    # ওয়ার্কার চেক: ওয়ার্কার থাকলে সেটা দিয়ে ডাউনলোড হবে, নাহলে মেইন বোট দিয়ে
+    uploader = worker_client if (worker_client and worker_client.is_connected) else client
+    
+    try:
+        async with upload_semaphore:
+            await status_msg.edit_text(f"⏳ **১/৩: ডাটাবেসে সেভ হচ্ছে...**\n(By: {'Worker' if uploader == worker_client else 'Bot'})")
+            copied_msg = await message.copy(chat_id=DB_CHANNEL_ID)
+            bot_username = (await client.get_me()).username
+            tg_link = f"https://t.me/{bot_username}?start=get-{copied_msg.id}"
+            
+            start_time = time.time()
+            last_update_time =[start_time]
+            
+            # মিডিয়া ডাউনলোড (ওয়ার্কার বা বোট ব্যবহার করে)
+            file_path = await uploader.download_media(
+                message, 
+                progress=down_progress, 
+                progress_args=(status_msg, start_time, last_update_time)
+            )
+
+            await status_msg.edit_text(f"⏳ **৩/৩: মাল্টি-সার্ভারে আপলোড হচ্ছে...**")
+            
+            # প্যারালাল আপলোড
+            results = await asyncio.gather(
+                upload_to_gofile(file_path), upload_to_fileditch(file_path), upload_to_tmpfiles(file_path),
+                upload_to_pixeldrain(file_path), upload_to_doodstream(file_path), upload_to_streamtape(file_path),
+                upload_to_filemoon(file_path), upload_to_mixdrop(file_path), return_exceptions=True
+            )
+
+            if os.path.exists(file_path): os.remove(file_path)
+            
+            convo["links"].append({
+                "label": temp_name, "tg_url": tg_link, 
+                "gofile_url": results[0] if not isinstance(results[0], Exception) else None,
+                "fileditch_url": results[1] if not isinstance(results[1], Exception) else None,
+                "tmpfiles_url": results[2] if not isinstance(results[2], Exception) else None,
+                "pixel_url": results[3] if not isinstance(results[3], Exception) else None,
+                "dood_url": results[4] if not isinstance(results[4], Exception) else None,
+                "stape_url": results[5] if not isinstance(results[5], Exception) else None,
+                "filemoon_url": results[6] if not isinstance(results[6], Exception) else None,
+                "mixdrop_url": results[7] if not isinstance(results[7], Exception) else None,
+                "is_grouped": True
+            })
+            await status_msg.edit_text(f"✅ **আপলোড সম্পন্ন:** {temp_name}")
+            
+    except Exception as e:
+        logger.error(f"Upload Error: {e}")
+        await status_msg.edit_text(f"❌ Failed: {e}")
+    finally:
+        convo["pending_uploads"] = max(0, convo.get("pending_uploads", 0) - 1)
     convo = user_conversations.get(uid)
     if not convo:
         return
@@ -1803,5 +1903,13 @@ if __name__ == "__main__":
     ping_thread.daemon = True
     ping_thread.start()
     
-    print("🚀 Ultimate SPA Bot Running!")
-    bot.run()
+    print("🚀 Ultimate SPA Bot is Starting with Worker Support...")
+
+    async def main():
+        await bot.start()
+        await start_worker() # ডাটাবেস থেকে সেশন নিয়ে ওয়ার্কার অটো-চালু হবে
+        print("✅ Bot and Worker are Online!")
+        await asyncio.Event().wait()
+
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main())
