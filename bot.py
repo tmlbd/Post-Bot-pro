@@ -90,18 +90,13 @@ DEFAULT_USER_AD_LINKS =["https://www.google.com", "https://www.bing.com"]
 user_conversations = {}
 
 # 🔥 BATCH UPLOAD QUEUE LIMITER (সার্ভার লোড এবং Flood Wait রোধ করতে)
-upload_semaphore = asyncio.Semaphore(2)
+upload_semaphore = # 🔥 BATCH UPLOAD QUEUE LIMITER (সার্ভার লোড এবং Flood Wait রোধ করতে)
+CONCURRENT_UPLOADS_LIMIT = 3  # একসাথে ৩টি ফাইল আপলোড হবে
+upload_semaphore = asyncio.Semaphore(CONCURRENT_UPLOADS_LIMIT)
 
-# ---- DATABASE FUNCTIONS ----
-async def add_user(user_id, name):
-    if not await users_col.find_one({"_id": user_id}):
-        await users_col.insert_one({
-            "_id": user_id, 
-            "name": name,
-            "authorized": False, 
-            "banned": False,
-            "joined_date": datetime.datetime.now()
-        })
+# সিরিয়াল ট্র্যাক করার জন্য ভ্যারিয়েবল
+active_uploads = 0
+waiting_queue = []
 
 async def is_authorized(user_id):
     if user_id == OWNER_ID:
@@ -1514,37 +1509,73 @@ async def down_progress(current, total, status_msg, start_time, last_update_time
         except:
             pass
 
-# 🔥 BACKGROUND ASYNC UPLOAD (ALLOWS MULTIPLE AT ONCE)
+# 🔥 BACKGROUND ASYNC UPLOAD (ALLOWS MULTIPLE USERS & LIVE QUEUE TRACKING)
 async def process_file_upload(client, message, uid, temp_name):
+    global active_uploads, waiting_queue
+    
     convo = user_conversations.get(uid)
     if not convo: return
     
     convo["pending_uploads"] = convo.get("pending_uploads", 0) + 1
-    status_msg = await message.reply_text(f"🕒 **সারির অপেক্ষায়...**\n({temp_name})", quote=True)
+    status_msg = await message.reply_text(f"🕒 **প্রসেসিং শুরু হচ্ছে...**\n({temp_name})", quote=True)
     
-    # ওয়ার্কার চেক: ওয়ার্কার থাকলে সেটা দিয়ে ডাউনলোড হবে, নাহলে মেইন বোট দিয়ে
+    # সিরিয়ালে যোগ করা
+    queue_item = {"msg": status_msg, "uid": uid, "name": temp_name}
+    waiting_queue.append(queue_item)
+    my_position = len(waiting_queue)
+    
+    # যদি সার্ভার বিজি থাকে, তাহলে সিরিয়াল নাম্বার দেখাবে
+    if active_uploads >= CONCURRENT_UPLOADS_LIMIT:
+        try:
+            await status_msg.edit_text(
+                f"🕒 **সারির অপেক্ষায় (Queued)...**\n\n"
+                f"📦 ফাইল: **{temp_name}**\n"
+                f"🔢 আপনার সিরিয়াল: **{my_position} নাম্বার**\n"
+                f"⏳ সার্ভার ব্যস্ত, আগের জনের কাজ শেষ হলে আপনারটা অটোমেটিক শুরু হবে।"
+            )
+        except: pass
+
+    # ওয়ার্কার চেক
     uploader = worker_client if (worker_client and worker_client.is_connected) else client
     
     try:
         async with upload_semaphore:
+            # নিজের সিরিয়াল রিমুভ করা এবং কাজ শুরু করা
+            if queue_item in waiting_queue:
+                waiting_queue.remove(queue_item)
+            
+            active_uploads += 1
+            
+            # বাকি যারা লাইনে আছে তাদের সিরিয়াল নাম্বার আপডেট করে দেওয়া
+            for i, item in enumerate(waiting_queue):
+                try:
+                    await item["msg"].edit_text(
+                        f"🕒 **সারির অপেক্ষায় (Queued)...**\n\n"
+                        f"📦 ফাইল: **{item['name']}**\n"
+                        f"🔢 আপনার বর্তমান সিরিয়াল: **{i + 1} নাম্বার**\n"
+                        f"⏳ লাইন এগিয়ে আসছে..."
+                    )
+                except: pass
+
             await status_msg.edit_text(f"⏳ **১/৩: ডাটাবেসে সেভ হচ্ছে...**\n(By: {'Worker' if uploader == worker_client else 'Bot'})")
+            
             copied_msg = await message.copy(chat_id=DB_CHANNEL_ID)
             bot_username = (await client.get_me()).username
             tg_link = f"https://t.me/{bot_username}?start=get-{copied_msg.id}"
             
             start_time = time.time()
-            last_update_time =[start_time]
+            last_update_time = [start_time]
             
-            # মিডিয়া ডাউনলোড (ওয়ার্কার বা বোট ব্যবহার করে)
+            # মিডিয়া ডাউনলোড
             file_path = await uploader.download_media(
                 message, 
                 progress=down_progress, 
                 progress_args=(status_msg, start_time, last_update_time)
             )
 
-            await status_msg.edit_text(f"⏳ **৩/৩: মাল্টি-সার্ভারে আপলোড হচ্ছে...**")
+            await status_msg.edit_text(f"⏳ **৩/৩: মাল্টি-সার্ভারে আপলোড হচ্ছে...**\n({temp_name})\n_(প্যারালাল আপলোড চলছে)_")
             
-            # প্যারালাল আপলোড
+            # প্যারালাল আপলোড (Multiple Servers at once)
             results = await asyncio.gather(
                 upload_to_gofile(file_path), upload_to_fileditch(file_path), upload_to_tmpfiles(file_path),
                 upload_to_pixeldrain(file_path), upload_to_doodstream(file_path), upload_to_streamtape(file_path),
@@ -1569,8 +1600,11 @@ async def process_file_upload(client, message, uid, temp_name):
             
     except Exception as e:
         logger.error(f"Upload Error: {e}")
-        await status_msg.edit_text(f"❌ Failed: {e}")
+        try:
+            await status_msg.edit_text(f"❌ Failed: {e}")
+        except: pass
     finally:
+        active_uploads -= 1
         convo["pending_uploads"] = max(0, convo.get("pending_uploads", 0) - 1)
     convo = user_conversations.get(uid)
     if not convo:
