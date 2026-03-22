@@ -607,13 +607,16 @@ def apply_badge_to_poster(poster_bytes, text):
         return io.BytesIO(poster_bytes)
 
 # ============================================================================
-# 🔥 ADVANCED HTML GENERATOR (NEW AWESOME UI DESIGN WITH GROUPING + EMBED PLAYER + THEMES)
+# 🔥 ADVANCED HTML GENERATOR (UPDATED WITH 18+ NSFW BLUR EFFECT)
 # ============================================================================
 def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, admin_share_percent=20):
     title = data.get("title") or data.get("name")
     overview = data.get("overview", "No plot available.")
     poster = data.get('manual_poster_url') or f"https://image.tmdb.org/t/p/w500{data.get('poster_path')}"
     BTN_TELEGRAM = "https://i.ibb.co/kVfJvhzS/photo-2025-12-23-12-38-56-7587031987190235140.jpg"
+
+    # 🔞 18+ Check Logic
+    is_adult = data.get('adult', False) or data.get('force_adult', False)
 
     # 🔥 Theme CSS Switcher Logic
     theme = data.get("theme", "netflix")
@@ -646,6 +649,16 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
         cast_list = data.get('credits', {}).get('cast',[])
         cast_names = ", ".join([c['name'] for c in cast_list[:4]]) if cast_list else "Unknown"
 
+    # 🔥 Adult Poster Logic
+    if is_adult:
+        poster_html = f'''
+        <div class="nsfw-container" onclick="revealNSFW(this)">
+            <img src="{poster}" alt="{title} Poster" class="nsfw-blur">
+            <div class="nsfw-warning">🔞 18+<br><small style="font-size:10px;">Click to Reveal</small></div>
+        </div>'''
+    else:
+        poster_html = f'<img src="{poster}" alt="{title} Poster">'
+
     # 🔥 Trailer Auto-Fetcher
     trailer_key = ""
     videos = data.get('videos', {}).get('results',[])
@@ -663,7 +676,7 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
         </div>
         '''
 
-    # 🔥 Screenshots Auto-Fetcher
+    # 🔥 Screenshots Auto-Fetcher & Adult Blur Logic
     screenshots = data.get('manual_screenshots',[])
     if not screenshots and not data.get('is_manual'):
         backdrops = data.get('images', {}).get('backdrops',[])
@@ -671,7 +684,11 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
         
     ss_html = ""
     if screenshots:
-        ss_imgs = "".join([f'<img src="{img}" alt="Screenshot">' for img in screenshots])
+        if is_adult:
+            ss_imgs = "".join([f'<div class="nsfw-container" onclick="revealNSFW(this)"><img src="{img}" alt="Screenshot" class="nsfw-blur"><div class="nsfw-warning"><small>🔞 Tap to View</small></div></div>' for img in screenshots])
+        else:
+            ss_imgs = "".join([f'<img src="{img}" alt="Screenshot">' for img in screenshots])
+            
         ss_html = f'''
         <div class="section-title">📸 Screenshots</div>
         <div class="screenshot-grid">
@@ -683,14 +700,12 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
     embed_links =[]
     for link in links:
         if link.get("is_grouped"):
-            # শুধু Filemoon এবং MixDrop লাইভ প্লেয়ারে থাকবে (অ্যাড কম এবং ইউজার ফ্রেন্ডলি)
             if link.get('filemoon_url'):
                 embed_links.append({'name': '🎬 Filemoon HD', 'url': link['filemoon_url']})
             if link.get('mixdrop_url'):
                 m_url = link['mixdrop_url']
                 if m_url.startswith("//"): m_url = "https:" + m_url
                 embed_links.append({'name': '⚡ MixDrop HD', 'url': m_url})
-            # DoodStream এবং Streamtape কে শুধু লাইভ প্লেয়ার থেকে বাদ দেওয়া হয়েছে, যাতে পপ-আপ অ্যাড না আসে। 
 
     embed_html = ""
     if embed_links:
@@ -833,6 +848,11 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
 
         .promo-box {{ margin-top: 25px; text-align: center; }}
         .promo-box img {{ width: 100%; max-width: 300px; border-radius: 20px; border: 1px solid var(--border); }}
+
+        /* 🔞 NSFW CSS STYLES */
+        .nsfw-container {{ position: relative; display: inline-block; cursor: pointer; overflow: hidden; border-radius: 8px; width: 100%; height: 100%; }}
+        .nsfw-blur {{ filter: blur(25px) !important; transform: scale(1.1); transition: filter 0.5s ease, transform 0.5s ease; width: 100%; height: 100%; display: block; }}
+        .nsfw-warning {{ position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.85); color: #ff5252; padding: 10px; border-radius: 8px; font-weight: bold; text-align: center; border: 2px solid #ff5252; text-shadow: 1px 1px 5px #000; box-shadow: 0 4px 10px rgba(0,0,0,0.6); z-index: 5; pointer-events: none; }}
     </style>
     """
 
@@ -875,6 +895,21 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
         tabs.forEach(t => t.classList.remove('active'));
         btn.classList.add('active');
     }}
+
+    /* 🔞 NSFW Reveal Script */
+    function revealNSFW(container) {{
+        let img = container.querySelector('.nsfw-blur');
+        if(img) {{
+            img.classList.remove('nsfw-blur');
+            img.style.transform = 'scale(1)'; /* Reset scale after removing blur */
+        }}
+        let warning = container.querySelector('.nsfw-warning');
+        if(warning) warning.style.display = 'none';
+        
+        /* Remove cursor pointer so user knows it's already revealed */
+        container.style.cursor = 'default';
+        container.onclick = null;
+    }}
     </script>
     """
 
@@ -889,7 +924,7 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
             <!-- Movie Information Box -->
             <div class="info-box">
                 <div class="info-poster">
-                    <img src="{poster}" alt="{title} Poster">
+                    {poster_html}
                 </div>
                 <div class="info-text">
                     <div><span>⭐ Rating:</span> {rating}</div>
@@ -952,7 +987,6 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
     </div>
     {script_html}
     """
-
 # ---- IMAGE & CAPTION GENERATOR ----
 def generate_formatted_caption(data, pid=None):
     title = data.get("title") or data.get("name") or "N/A"
