@@ -525,16 +525,73 @@ async def get_tmdb_details(media_type, media_id):
     url = f"https://api.themoviedb.org/3/{media_type}/{media_id}?api_key={TMDB_API_KEY}&append_to_response=credits,similar,images,videos&include_image_language=en,null"
     return await fetch_url(url)
 
+# --- IMPROVED PASTE FUNCTION WITH FALLBACK ---
 async def create_paste_link(content):
     if not content:
         return None
-    url = "https://dpaste.com/api/"
-    data = {"content": content, "syntax": "html", "expiry_days": 14, "title": "Movie Post Code"}
-    headers = {'User-Agent': 'Mozilla/5.0'}
-    link = await fetch_url(url, method="POST", data=data, headers=headers)
-    if link and "dpaste.com" in link:
-        return link.strip()
+    
+    # প্রথম চেষ্টা: dpaste.com
+    try:
+        url = "https://dpaste.com/api/"
+        data = {"content": content, "syntax": "html", "expiry_days": 7, "title": "Movie Post Code"}
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, data=data, timeout=10) as resp:
+                if resp.status in [200, 201]:
+                    link = await resp.text()
+                    return link.strip()
+    except:
+        logger.error("dpaste is down, trying fallback...")
+
+    # দ্বিতীয় চেষ্টা (Fallback): spaceb.in
+    try:
+        url = "https://spaceb.in/api/v1/documents/"
+        json_data = {"content": content, "extension": "html"}
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=json_data, timeout=10) as resp:
+                res = await resp.json()
+                if res.get("status") == 201:
+                    return f"https://spaceb.in/{res['payload']['id']}"
+    except:
+        logger.error("Fallback paste service also failed.")
+    
     return None
+
+# --- IMPROVED GET CODE CALLBACK ---
+@bot.on_callback_query(filters.regex("^get_code_"))
+async def get_code(client, cb):
+    try:
+        _, _, uid = cb.data.rsplit("_", 2)
+        uid = int(uid)
+    except:
+        return
+        
+    data = user_conversations.get(uid)
+    if not data or "final" not in data:
+        return await cb.answer("Session Expired! Please generate again.", show_alert=True)
+    
+    await cb.answer("⏳ কোড তৈরি হচ্ছে (Checking Servers)...", show_alert=False)
+    
+    # লিঙ্ক তৈরি করার চেষ্টা
+    link = await create_paste_link(data["final"]["html"])
+    
+    if link:
+        # লিঙ্কের সাথে একটি কপিযোগ্য কোড ব্লক (ছোট করে) যাতে ইউজার বুঝতে পারে
+        msg_text = (
+            "✅ **Blogger Code Ready!**\n\n"
+            f"🔗 **Paste Link:** {link}\n\n"
+            "💡 উপরে দেওয়া লিঙ্কটি ওপেন করে কোডটি কপি করে নিন।"
+        )
+        await cb.message.reply_text(msg_text, disable_web_page_preview=True)
+    else:
+        # যদি সব সার্ভার ডাউন থাকে তবে ফাইল হিসেবে পাঠিয়ে দিবে
+        await cb.answer("❌ লিঙ্ক সার্ভার ডাউন! ফাইল পাঠানো হচ্ছে...", show_alert=True)
+        file_io = io.BytesIO(data["final"]["html"].encode())
+        file_io.name = "blogger_code.html"
+        await client.send_document(
+            cb.message.chat.id, 
+            file_io, 
+            caption="⚠️ লিঙ্ক সার্ভার কাজ করছে না, তাই সরাসরি HTML ফাইল পাঠানো হলো। এটি ওপেন করে কোড কপি করুন।"
+        )
 
 def get_smart_badge_position(pil_img):
     try:
