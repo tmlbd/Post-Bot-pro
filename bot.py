@@ -607,7 +607,7 @@ def apply_badge_to_poster(poster_bytes, text):
         return io.BytesIO(poster_bytes)
 
 # ============================================================================
-# 🔥 ULTIMATE HTML GENERATOR (LARGE BENGALI DESIGN & ORIGINAL SERVERS)
+# 🔥 UPDATED HTML GENERATOR (COMPACT DESIGN)
 # ============================================================================
 def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, admin_share_percent=20):
     title = data.get("title") or data.get("name")
@@ -615,10 +615,8 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
     poster = data.get('manual_poster_url') or f"https://image.tmdb.org/t/p/w500{data.get('poster_path')}"
     BTN_TELEGRAM = "https://i.ibb.co/kVfJvhzS/photo-2025-12-23-12-38-56-7587031987190235140.jpg"
 
-    # 🔞 18+ Check Logic
     is_adult = data.get('adult', False) or data.get('force_adult', False)
 
-    # 🔥 Theme CSS Switcher (Original Logic Kept)
     theme = data.get("theme", "netflix")
     if theme == "netflix":
         root_css = "--bg-color: #0d0d0f; --box-bg: #16161d; --text-main: #ffffff; --text-muted: #e0e0e0; --primary: #E50914; --accent: #ff0000; --border: #333; --btn-grad: linear-gradient(90deg, #E50914 0%, #ff5252 100%);"
@@ -629,30 +627,24 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
     else:
         root_css = "--bg-color: #0d0d0f; --box-bg: #16161d; --text-main: #ffffff; --text-muted: #e0e0e0; --primary: #E50914; --accent: #ff0000; --border: #333; --btn-grad: linear-gradient(90deg, #E50914 0%, #ff5252 100%);"
 
-    # Extraction
     lang_str = data.get('custom_language', 'Dual Audio').strip()
     year = str(data.get("release_date") or data.get("first_air_date") or "----")[:4]
     rating = f"{data.get('vote_average', 0):.1f}/10"
-    
-    # Cast & Runtime
     runtime = data.get('runtime') or (data.get('episode_run_time',[0])[0] if data.get('episode_run_time') else "N/A")
     runtime_str = f"{runtime} min" if runtime != "N/A" else "N/A"
     cast_list = data.get('credits', {}).get('cast',[])
     cast_names = ", ".join([c['name'] for c in cast_list[:4]]) if cast_list else "Unknown"
 
-    # Poster & Screenshots (Original logic with NSFW Blur)
     if is_adult:
         poster_html = f'<div class="nsfw-container" onclick="revealNSFW(this)"><img src="{poster}" class="nsfw-blur"><div class="nsfw-warning">🔞 18+<br><small>Click to Reveal</small></div></div>'
     else:
         poster_html = f'<img src="{poster}" alt="Poster">'
 
-    # Trailer
     trailer_key = ""; videos = data.get('videos', {}).get('results',[])
     for v in videos:
         if v.get('type') == 'Trailer': trailer_key = v.get('key'); break
     trailer_html = f'<div class="section-title">🎬 Official Trailer</div><div class="video-container"><iframe src="https://www.youtube.com/embed/{trailer_key}" allowfullscreen></iframe></div>' if trailer_key else ""
 
-    # Screenshots
     screenshots = data.get('manual_screenshots',[])
     if not screenshots and not data.get('is_manual'):
         backdrops = data.get('images', {}).get('backdrops',[])
@@ -664,7 +656,6 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
         else: ss_imgs = "".join([f'<img src="{img}" alt="Screenshot">' for img in screenshots])
         ss_html = f'<div class="section-title">📸 Movie Screenshots</div><div class="screenshot-grid">{ss_imgs}</div>'
 
-    # 🔥 EMBED PLAYER (ORIGINAL SERVERS) 🔥
     embed_links =[]
     for link in links:
         if link.get("is_grouped"):
@@ -679,7 +670,6 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
         server_btns = "".join([f'<button class="server-tab {("active" if i==0 else "")}" onclick="changeServer(\'{base64.b64encode(el["url"].encode()).decode()}\', this)">📺 {el["name"]}</button>' for i, el in enumerate(embed_links)])
         embed_html = f'<div class="section-title">🍿 Watch Online (Live Player)</div><div class="embed-container"><iframe id="main-embed-player" src="{embed_links[0]["url"]}" allowfullscreen="true" frameborder="0"></iframe></div><div class="server-switcher">{server_btns}</div>'
 
-    # 🔥 DOWNLOAD SERVER LIST (ALL ORIGINAL SERVERS) 🔥
     server_list_html = ""
     grouped_links = {}
     for link in links:
@@ -704,7 +694,6 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
                 server_list_html += f'<button class="final-server-btn" onclick="goToLink(\'{base64.b64encode(link.get("url","").encode()).decode()}\')" style="background: #0088cc;">📥 Download Now</button>'
         server_list_html += '</div>\n'
 
-    # Revenue Mix
     weighted_ad_list = []
     total_pool = (owner_ad_links_list * 2) + (user_ad_links_list * 8)
     random.shuffle(total_pool)
@@ -715,91 +704,70 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
     <style>
         :root {{ {root_css} }}
         body {{ margin: 0; padding: 0; background: var(--bg-color); }}
-        .app-wrapper {{ font-family: 'Hind Siliguri', sans-serif; background: var(--bg-color); max-width: 680px; margin: 15px auto; padding: 25px; color: var(--text-main); border: 1px solid var(--border); border-radius: 15px; box-shadow: 0 15px 50px rgba(0,0,0,0.6); box-sizing: border-box; }}
+        .app-wrapper {{ font-family: 'Hind Siliguri', sans-serif; background: var(--bg-color); max-width: 600px; margin: 10px auto; padding: 15px; color: var(--text-main); border: 1px solid var(--border); border-radius: 12px; box-sizing: border-box; }}
         
-        .movie-title {{ font-size: 32px; font-weight: 800; color: var(--accent); text-align: center; margin-bottom: 25px; line-height: 1.3; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }}
+        .movie-title {{ font-size: 24px; font-weight: 800; color: var(--accent); text-align: center; margin-bottom: 15px; }}
         
-        .info-container {{ display: flex; background: var(--box-bg); border-radius: 15px; padding: 20px; gap: 20px; border: 1px solid var(--border); align-items: flex-start; margin-bottom: 25px; }}
-        @media (max-width: 500px) {{ .info-container {{ flex-direction: column; align-items: center; text-align: center; }} }}
-        
-        .info-poster img {{ width: 170px; border-radius: 12px; border: 3px solid var(--border); box-shadow: 0 8px 20px rgba(0,0,0,0.5); }}
-        .info-text {{ flex: 1; font-size: 17px; line-height: 1.8; color: var(--text-muted); }}
+        .info-container {{ display: flex; background: var(--box-bg); border-radius: 10px; padding: 12px; gap: 15px; border: 1px solid var(--border); margin-bottom: 15px; }}
+        .info-poster img {{ width: 110px; border-radius: 8px; border: 2px solid var(--border); }}
+        .info-text {{ flex: 1; font-size: 14px; line-height: 1.5; color: var(--text-muted); }}
         .info-text b {{ color: var(--accent); }}
 
-        /* 🔥 LARGE BENGALI INSTRUCTION BOX 🔥 */
+        /* ✅ SMALLER INSTRUCTION CARD */
         .instruction-card {{ 
-            background: linear-gradient(145deg, #1e1e26 0%, #111116 100%); 
-            border: 3px solid #FFEB3B; 
-            border-radius: 18px; 
-            padding: 25px; 
-            margin: 30px 0; 
-            box-shadow: 0 0 25px rgba(255, 235, 59, 0.15);
+            background: rgba(255, 255, 255, 0.03); 
+            border: 1px dashed #FFEB3B; 
+            border-radius: 10px; 
+            padding: 12px; 
+            margin: 15px 0; 
         }}
         .instruction-title {{ 
             display: block; 
             color: #FFEB3B; 
-            font-size: 26px; 
-            font-weight: 800; 
+            font-size: 17px; 
+            font-weight: 700; 
             text-align: center; 
-            margin-bottom: 20px; 
-            border-bottom: 2px solid rgba(255,255,255,0.1);
-            padding-bottom: 15px;
+            margin-bottom: 10px; 
         }}
-        .step-row {{ display: flex; align-items: flex-start; margin-bottom: 20px; gap: 15px; }}
+        .step-row {{ display: flex; align-items: center; margin-bottom: 6px; gap: 10px; }}
         .step-icon {{ 
-            background: #FFEB3B; 
-            color: #000; 
-            width: 38px; 
-            height: 38px; 
-            border-radius: 50%; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center; 
-            font-weight: 900; 
-            font-size: 20px; 
-            flex-shrink: 0;
-            box-shadow: 0 0 10px #FFEB3B;
+            background: #FFEB3B; color: #000; width: 22px; height: 22px; border-radius: 50%; 
+            display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; flex-shrink: 0;
         }}
-        .step-desc {{ font-size: 20px; color: #fff; line-height: 1.5; font-weight: 500; }}
-        .step-desc b {{ color: #00d2ff; font-weight: 800; }}
+        .step-desc {{ font-size: 14px; color: #eee; }}
 
-        /* Action Buttons */
-        .action-btns {{ display: flex; flex-direction: column; gap: 20px; }}
+        /* ✅ SMALLER ACTION BUTTONS */
+        .action-btns {{ display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }}
         .btn-main {{ 
-            width: 100%; padding: 22px; font-size: 22px; font-weight: 800; border: none; border-radius: 12px; cursor: pointer; 
-            transition: all 0.3s; color: #fff; display: flex; justify-content: center; align-items: center; gap: 12px;
-            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+            padding: 12px 5px; font-size: 14px; font-weight: 700; border: none; border-radius: 8px; cursor: pointer; 
+            transition: 0.3s; color: #fff; display: flex; justify-content: center; align-items: center; gap: 5px;
         }}
-        .btn-main:active {{ transform: scale(0.96); }}
         .btn-watch-main {{ background: var(--btn-grad); }}
         .btn-download-main {{ background: linear-gradient(90deg, #00c853 0%, #64dd17 100%); color: #000; }}
 
-        #links-area {{ display: none; padding-top: 10px; animation: slideUp 0.6s ease; }}
-        @keyframes slideUp {{ from {{ opacity: 0; transform: translateY(30px); }} to {{ opacity: 1; transform: translateY(0); }} }}
+        #links-area {{ display: none; padding-top: 10px; animation: slideUp 0.4s ease; }}
+        @keyframes slideUp {{ from {{ opacity: 0; transform: translateY(15px); }} to {{ opacity: 1; transform: translateY(0); }} }}
 
-        .section-title {{ font-size: 22px; font-weight: bold; color: #fff; margin: 30px 0 15px; border-left: 6px solid var(--primary); padding-left: 15px; }}
-        
-        /* Server List Grid */
-        .quality-title {{ background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; font-size: 18px; font-weight: bold; color: var(--accent); margin: 25px 0 12px; border: 1px solid var(--border); }}
-        .server-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }}
-        .final-server-btn {{ padding: 16px; font-size: 15px; font-weight: 700; color: #fff; border: none; border-radius: 8px; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 10px rgba(0,0,0,0.4); }}
-        .final-server-btn:hover {{ filter: brightness(1.2); transform: translateY(-3px); }}
+        .section-title {{ font-size: 17px; font-weight: bold; color: #fff; margin: 20px 0 10px; border-left: 4px solid var(--primary); padding-left: 10px; }}
+        .quality-title {{ background: rgba(255,255,255,0.05); padding: 8px; border-radius: 6px; font-size: 15px; font-weight: bold; color: var(--accent); margin: 15px 0 8px; }}
+        .server-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }}
+        .final-server-btn {{ padding: 10px; font-size: 13px; font-weight: 700; color: #fff; border: none; border-radius: 6px; cursor: pointer; }}
 
-        .embed-container {{ position: relative; padding-bottom: 56.25%; height: 0; border-radius: 15px; border: 2px solid var(--border); background: #000; overflow: hidden; margin-bottom: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }}
+        .embed-container {{ position: relative; padding-bottom: 56.25%; height: 0; border-radius: 10px; border: 1px solid var(--border); background: #000; overflow: hidden; margin-bottom: 10px; }}
         .embed-container iframe {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; }}
-        .server-switcher {{ display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 25px; justify-content: center; }}
-        .server-tab {{ background: var(--box-bg); color: #fff; border: 1px solid var(--border); padding: 12px 20px; border-radius: 8px; cursor: pointer; font-size: 15px; font-weight: bold; transition: 0.3s; }}
-        .server-tab.active {{ background: var(--primary); border-color: var(--primary); box-shadow: 0 0 15px var(--primary); }}
+        .server-switcher {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; justify-content: center; }}
+        .server-tab {{ background: var(--box-bg); color: #fff; border: 1px solid var(--border); padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; }}
+        .server-tab.active {{ background: var(--primary); border-color: var(--primary); }}
 
-        .screenshot-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 30px; }}
-        .screenshot-grid img {{ width: 100%; border-radius: 10px; border: 1px solid var(--border); }}
+        .screenshot-grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 20px; }}
+        .screenshot-grid img {{ width: 100%; border-radius: 6px; border: 1px solid var(--border); }}
         
-        .video-container {{ position: relative; padding-bottom: 56.25%; height: 0; border-radius: 15px; border: 1px solid var(--border); overflow: hidden; margin-bottom: 30px; }}
+        .video-container {{ position: relative; padding-bottom: 56.25%; height: 0; border-radius: 10px; overflow: hidden; margin-bottom: 20px; }}
         .video-container iframe {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; }}
 
-        .nsfw-container {{ position: relative; cursor: pointer; border-radius: 12px; overflow: hidden; }}
-        .nsfw-blur {{ filter: blur(35px); transform: scale(1.1); transition: 0.6s; width: 100%; display: block; }}
-        .nsfw-warning {{ position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.9); color: #ff5252; padding: 15px 25px; border-radius: 10px; font-weight: bold; font-size: 18px; border: 2px solid #ff5252; z-index: 10; text-align: center; }}
+        .nsfw-container {{ position: relative; cursor: pointer; border-radius: 8px; overflow: hidden; }}
+        .nsfw-blur {{ filter: blur(30px); width: 100%; display: block; }}
+        .nsfw-warning {{ position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: #ff5252; padding: 10px; border-radius: 6px; font-size: 14px; text-align: center; border: 1px solid #ff5252; }}
     </style>
     """
 
@@ -809,19 +777,16 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
     function startUnlock(btn) {{
         let ad = MY_ADS[Math.floor(Math.random() * MY_ADS.length)];
         window.open(ad, '_blank');
-        
-        btn.disabled = true;
         document.querySelectorAll('.btn-main').forEach(b => b.disabled = true);
-        
         let count = 5;
         let timer = setInterval(() => {{
-            btn.innerHTML = "⏳ দয়া করে " + count + " সেকেন্ড অপেক্ষা করুন...";
+            btn.innerHTML = "⏳ " + count + "s...";
             count--;
             if(count < 0) {{
                 clearInterval(timer);
                 document.getElementById('details-area').style.display = 'none';
                 document.getElementById('links-area').style.display = 'block';
-                window.scrollTo({{top: 0, behavior: 'smooth'}});
+                window.scrollTo(0,0);
             }}
         }}, 1000);
     }}
@@ -833,7 +798,6 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
     }}
     function revealNSFW(container) {{
         container.querySelector('.nsfw-blur').style.filter = 'none';
-        container.querySelector('.nsfw-blur').style.transform = 'scale(1)';
         container.querySelector('.nsfw-warning').style.display = 'none';
     }}
     </script>
@@ -842,85 +806,58 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
     return f"""
     {style_html}
     <div class="app-wrapper">
-        <!-- Main Details View -->
         <div id="details-area">
             <div class="movie-title">{title} ({year})</div>
-            
             <div class="info-container">
                 <div class="info-poster">{poster_html}</div>
                 <div class="info-text">
                     <div><b>⭐ Rating:</b> {rating}</div>
                     <div><b>🎭 Genre:</b> {data.get('genres',[{}])[0].get('name','Movie')}</div>
-                    <div><b>🗣️ Language:</b> {lang_str}</div>
-                    <div><b>⏱️ Runtime:</b> {runtime_str}</div>
-                    <div><b>👥 Cast:</b> {cast_names}</div>
+                    <div><b>🗣️ Lang:</b> {lang_str}</div>
+                    <div><b>⏱️ Time:</b> {runtime_str}</div>
                 </div>
             </div>
 
-            <div class="section-title">📖 Storyline / গল্পের সারসংক্ষেপ</div>
-            <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 12px; font-size: 16px; line-height: 1.6; text-align: justify; border: 1px solid var(--border); color: var(--text-muted);">
-                {overview}
+            <div class="section-title">📖 Storyline</div>
+            <div style="font-size: 13.5px; line-height: 1.5; color: var(--text-muted); text-align: justify; padding: 0 5px;">
+                {overview[:400]}...
             </div>
 
             {trailer_html}
             {ss_html}
 
-            <!-- 📢 LARGE BENGALI INSTRUCTION CARD -->
             <div class="instruction-card">
-                <span class="instruction-title">📥 কিভাবে ডাউনলোড বা অনলাইনে দেখবেন?</span>
-                
-                <div class="step-row">
-                    <div class="step-icon">১</div>
-                    <div class="step-desc">নিচে থাকা <b>WATCH ONLINE</b> বা <b>DOWNLOAD LINKS</b> বাটনে ক্লিক করুন।</div>
-                </div>
-                
-                <div class="step-row">
-                    <div class="step-icon">২</div>
-                    <div class="step-desc">নতুন একটি ট্যাব ওপেন হলে সেখানে মাত্র <b>৫ সেকেন্ড অপেক্ষা</b> করুন।</div>
-                </div>
-                
-                <div class="step-row">
-                    <div class="step-icon">৩</div>
-                    <div class="step-desc">যদি কোনো <b>বিজ্ঞাপন বা পপ-আপ</b> আসে, তবে সেটি <b>Close</b> করে দিন বা <b>Back</b> বাটন চাপুন।</div>
-                </div>
-                
-                <div class="step-row" style="margin-bottom:0;">
-                    <div class="step-icon">৪</div>
-                    <div class="step-desc">৫ সেকেন্ড পর অটোমেটিক এই পেজে <b>ভিডিও প্লেয়ার ও সব ডাউনলোড লিঙ্ক</b> চলে আসবে।</div>
-                </div>
+                <span class="instruction-title">📥 ডাউনলোড বা অনলাইন নির্দেশিকা:</span>
+                <div class="step-row"><div class="step-icon">১</div><div class="step-desc">যেকোনো বাটনে ক্লিক করুন।</div></div>
+                <div class="step-row"><div class="step-icon">২</div><div class="step-desc">নতুন ট্যাব ওপেন হলে <b>৫ সেকেন্ড</b> অপেক্ষা করুন।</div></div>
+                <div class="step-row"><div class="step-icon">৩</div><div class="step-desc">অ্যাড আসলে ব্যাক বাটন চেপে পুনরায় এখানে আসুন।</div></div>
             </div>
 
             <div class="action-btns">
-                <button class="btn-main btn-watch-main" onclick="startUnlock(this)">▶️ WATCH ONLINE (অনলাইনে দেখুন)</button>
-                <button class="btn-main btn-download-main" onclick="startUnlock(this)">📥 DOWNLOAD LINKS (ডাউনলোড লিঙ্ক)</button>
+                <button class="btn-main btn-watch-main" onclick="startUnlock(this)">▶️ WATCH ONLINE</button>
+                <button class="btn-main btn-download-main" onclick="startUnlock(this)">📥 DOWNLOAD LINKS</button>
             </div>
             
-            <div style="margin-top:30px; text-align:center;">
-                <a href="https://t.me/+6hvCoblt6CxhZjhl" target="_blank"><img src="{BTN_TELEGRAM}" style="width:100%; max-width:400px; border-radius:15px; box-shadow: 0 5px 15px rgba(0,0,0,0.5);"></a>
+            <div style="margin-top:20px; text-align:center;">
+                <a href="https://t.me/+6hvCoblt6CxhZjhl" target="_blank"><img src="{BTN_TELEGRAM}" style="width:100%; max-width:280px; border-radius:10px;"></a>
             </div>
         </div>
 
-        <!-- Unlocked Links View -->
         <div id="links-area">
-            <div style="text-align:center; color:#00E676; font-size:22px; font-weight:800; margin-bottom:25px; border-bottom:2px solid var(--border); padding-bottom:15px;">✅ লিঙ্ক আনলক হয়েছে (SUCCESSFULLY UNLOCKED)</div>
-            
+            <div style="text-align:center; color:#00E676; font-size:16px; font-weight:800; margin-bottom:15px;">✅ UNLOCKED SUCCESSFULLY</div>
             {embed_html}
-            
-            <div class="section-title">📥 High-Speed Download Servers</div>
-            <p style="color:var(--text-muted); font-size:15px; margin-bottom:20px;">নিচের যেকোনো একটি সার্ভার থেকে হাই-স্পিডে ডাউনলোড করুন:</p>
-            
+            <div class="section-title">📥 Download Servers</div>
             <div class="server-list-container">
                 {server_list_html}
             </div>
-            
-            <div style="text-align:center; margin-top:40px;">
-                <button class="btn-main" onclick="location.reload()" style="background:#333; width:auto; padding:12px 30px; font-size:16px;">🔄 Go Back (পেছনে যান)</button>
+            <div style="text-align:center; margin-top:25px;">
+                <button class="btn-main" onclick="location.reload()" style="background:#333; width:auto; padding:8px 20px; margin: 0 auto;">🔄 Go Back</button>
             </div>
         </div>
     </div>
     {script_html}
     """
-# ---- IMAGE & CAPTION GENERATOR ----
+    # ---- IMAGE & CAPTION GENERATOR ----
 def generate_formatted_caption(data, pid=None):
     title = data.get("title") or data.get("name") or "N/A"
     is_adult = data.get('adult', False) or data.get('force_adult', False)
