@@ -5,7 +5,7 @@ import aiohttp
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-# মেইন বটের ফাংশন ও ভ্যারিয়েবল ইমপোর্ট করার জন্য নির্ভুল মেথড
+# মেইন বটের ফাংশন ও ভ্যারিয়েবল ইমপোর্ট
 try:
     from bot import (
         user_conversations, upload_semaphore, DB_CHANNEL_ID, 
@@ -36,33 +36,33 @@ async def progress_callback(current, total, status_msg, start_time):
                 size /= 1024.0
             return f"{size:.2f} TB"
 
-        done = int(percent / 10)
-        bar = "🟢" * done + "⚪" * (10 - done)
-        text = (f"🚀 **ফাইল ডাউনলোড হচ্ছে...**\n\n"
+        bar = "🟢" * int(percent / 10) + "⚪" * (10 - int(percent / 10))
+        text = (f"🚀 **সার্ভারে ফাইল ডাউনলোড হচ্ছে...**\n\n"
                 f"📊 {bar} **{percent:.1f}%**\n"
                 f"💾 {hbytes(current)} / {hbytes(total)}\n"
                 f"⚡ স্পিড: {hbytes(speed)}/s")
         try: await status_msg.edit_text(text)
         except: pass
 
-async def download_file_from_url(url, file_path, status_msg):
+async def download_worker(url, file_path, status_msg):
     start_time = time.time()
-    if os.path.exists(file_path): os.remove(file_path)
-    # প্রফেশনাল হেডার যাতে সার্ভার বটকে ব্লক না করে
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"}
-    
     async with aiohttp.ClientSession(headers=headers) as session:
         try:
             async with session.get(url, timeout=None, allow_redirects=True) as resp:
                 if resp.status != 200:
-                    return False, f"Server Error: {resp.status}"
+                    return False, f"সার্ভার থেকে এরর এসেছে (Status: {resp.status})"
                 
-                # চেক করা হচ্ছে এটি HTML পেজ কিনা (যেমন dldokan এর লিংকে হয়)
+                # কন্টেন্ট টাইপ চেক - সবচেয়ে গুরুত্বপূর্ণ অংশ
                 ctype = resp.headers.get('Content-Type', '').lower()
                 if 'text' in ctype or 'html' in ctype:
-                    return False, "এটি একটি ডাউনলোড পেজ (HTML), ডিরেক্ট ফাইল লিংক নয়।"
-
+                    return False, "এটি একটি ডাউনলোড ওয়েব পেজ (HTML), ডিরেক্ট ফাইল লিংক নয়।"
+                
+                # ফাইলের সাইজ চেক
                 total_size = int(resp.headers.get('content-length', 0))
+                if total_size < 1024 * 1024: # ১ এমবি এর কম হলে ভিডিও হওয়ার সম্ভাবনা নেই
+                    return False, "ফাইলের সাইজ খুবই ছোট, এটি কোনো ভিডিও ফাইল নয়।"
+
                 downloaded = 0
                 with open(file_path, 'wb') as f:
                     async for chunk in resp.content.iter_chunked(1024*1024):
@@ -72,53 +72,51 @@ async def download_file_from_url(url, file_path, status_msg):
                             await progress_callback(downloaded, total_size, status_msg, start_time)
                 return True, "Success"
         except Exception as e:
-            return False, str(e)
+            return False, f"লিংক এরর: {str(e)}"
 
-# 🔥 হুবহু মেইন বোটের প্রসেসকে হাইজ্যাক করার জন্য (Group -1 এবং stop_propagation)
 @Client.on_message(filters.private & filters.text & filters.incoming, group=-1)
 async def url_upload_handler(client, message):
     uid = message.from_user.id
     text = message.text.strip()
     
-    if uid not in user_conversations:
-        return
-    
+    if uid not in user_conversations: return
     convo = user_conversations[uid]
+    
+    # শুধুমাত্র লিংক দেওয়ার স্টেজে কাজ করবে
     if convo.get("state") != "wait_link_url" or not text.startswith("http"):
         return
 
-    # 🛑 মেইন বোটের হ্যান্ডলারকে থামিয়ে দেওয়া
+    # 🛑 মেইন বোটের প্রসেস থামিয়ে দেওয়া (এটিই মেইন কোডকে বাইপাস করবে)
     message.stop_propagation()
 
     temp_name = convo.get("temp_name", "Remote File")
-    status_msg = await message.reply_text("🔍 **লিংকটি পরীক্ষা করা হচ্ছে...**", quote=True)
+    status_msg = await message.reply_text("🔍 **ডিরেক্ট লিংক কি না যাচাই করা হচ্ছে...**", quote=True)
     
     local_filename = f"dl_{uid}_{int(time.time())}.mp4"
     
     try:
         async with upload_semaphore:
-            success, error_msg = await download_file_from_url(text, local_filename, status_msg)
+            success, error_msg = await download_worker(text, local_filename, status_msg)
             
             if not success:
-                # যদি এটি সরাসরি ফাইল না হয়, তবে ইউজারকে ওয়ার্নিং দিবে
+                # 🛑 ওয়ার্নিং মেসেজ: কোনো কিছু সেভ হবে না
                 await status_msg.edit_text(
-                    f"❌ **ডাউনলোড করা সম্ভব হয়নি!**\n\n**কারণ:** {error_msg}\n\n"
-                    "💡 **টিপস:** বট শুধুমাত্র ডিরেক্ট লিংক সাপোর্ট করে। dldokan বা অন্য সাইট থেকে 'Direct Download Link' টা কপি করে দিন।"
+                    f"⚠️ **সতর্কবার্তা (Invalid Link!)**\n\n"
+                    f"❌ **এরর:** {error_msg}\n\n"
+                    f"বট আপনার এই লিংকটি **Save করেনি**।\n"
+                    f"দয়া করে ভিডিও ফাইলটির আসল **Direct Link** কপি করে পুনরায় সেন্ড করুন।"
                 )
-                # মেইন বোটের পরবর্তী অপশন দিয়ে দেওয়া
-                await message.reply_text("বিকল্প হিসেবে আপনি ভিডিও ফাইলটি সরাসরি ফরওয়ার্ড করতে পারেন বা অন্য লিংক দিতে পারেন।", 
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Add Another Link", callback_data=f"lnk_yes_{uid}"), InlineKeyboardButton("🏁 Finish", callback_data=f"lnk_no_{uid}")]]))
                 return
 
-            # ডাউনলোড সফল হলে আপলোড শুরু হবে
-            await status_msg.edit_text("⏳ **ডাউনলোড সফল! এখন মাল্টি-সার্ভার মিরর আপলোড হচ্ছে...**")
+            # ডিরেক্ট ফাইল হলে আপলোড প্রসেস শুরু
+            await status_msg.edit_text("⏳ **ডাউনলোড সফল! এখন মিরর সার্ভারগুলোতে আপলোড হচ্ছে...**")
 
-            # ১. টেলিগ্রাম ডাটাবেস
+            # টেলিগ্রাম ব্যাকআপ
             tg_msg = await client.send_document(chat_id=DB_CHANNEL_ID, document=local_filename, caption=f"Remote Upload: {temp_name}")
             bot_username = (await client.get_me()).username
             tg_link = f"https://t.me/{bot_username}?start=get-{tg_msg.id}"
 
-            # ২. মিরর সার্ভারগুলো (প্যারালাল)
+            # মিররিং (প্যারালাল)
             res = await asyncio.gather(
                 upload_to_gofile(local_filename), upload_to_fileditch(local_filename), 
                 upload_to_tmpfiles(local_filename), upload_to_pixeldrain(local_filename), 
@@ -129,7 +127,6 @@ async def url_upload_handler(client, message):
 
             if os.path.exists(local_filename): os.remove(local_filename)
 
-            # ডাটাবেসে সেভ
             convo["links"].append({
                 "label": temp_name, "tg_url": tg_link, 
                 "gofile_url": res[0] if not isinstance(res[0], Exception) else None,
@@ -143,9 +140,8 @@ async def url_upload_handler(client, message):
                 "is_grouped": True
             })
 
-            # সম্পন্ন মেসেজ
             await status_msg.edit_text(f"✅ **{temp_name}** আপলোড সম্পন্ন!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Add More Link", callback_data=f"lnk_yes_{uid}"), InlineKeyboardButton("🏁 Finish", callback_data=f"lnk_no_{uid}")]]))
 
     except Exception as e:
         if os.path.exists(local_filename): os.remove(local_filename)
-        await status_msg.edit_text(f"❌ এরর: {str(e)}")
+        await status_msg.edit_text(f"❌ মারাত্মক এরর: {str(e)}")
