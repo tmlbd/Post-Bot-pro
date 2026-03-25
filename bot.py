@@ -1927,8 +1927,50 @@ async def get_code(client, cb):
         file.name = "post.html"
         await client.send_document(cb.message.chat.id, file, caption="⚠️ Link failed. Download File.")
 
-# ---- ENTRY POINT ----
+# --- PLUGIN LOADER FUNCTION ---
+async def load_plugins():
+    """plugins ফোল্ডার থেকে অটোমেটিক সব মডিউল লোড করবে"""
+    # কারেন্ট ডিরেক্টরিতে plugins নামে ফোল্ডার খুঁজবে
+    plugins_path = os.path.join(os.path.dirname(__file__), "plugins")
+    
+    # যদি ফোল্ডার না থাকে তবে তৈরি করবে
+    if not os.path.exists(plugins_path):
+        os.makedirs(plugins_path)
+        return
+
+    print("🔌 Loading plugins...")
+    # plugins ফোল্ডারের ভেতরকার সব .py ফাইল চেক করবে
+    for loader, module_name, is_pkg in pkgutil.iter_modules([plugins_path]):
+        try:
+            # মডিউলটি ইম্পোর্ট করছে
+            module = importlib.import_module(f"plugins.{module_name}")
+            
+            # যদি ঐ ফাইলে register নামে কোনো ফাংশন থাকে, সেটা কল করবে
+            if hasattr(module, "register"):
+                await module.register(bot)
+            print(f"✅ Plugin Loaded: {module_name}")
+        except Exception as e:
+            print(f"❌ Failed to load plugin {module_name}: {e}")
+
+# --- UPDATED MAIN FUNCTION ---
+async def main():
+    # ১. প্রথমে মেইন বট স্টার্ট হবে
+    await bot.start()
+    
+    # ২. এরপর আপনার সব প্লাগইন/ফিচার লোড হবে
+    await load_plugins()
+    
+    # ৩. এরপর ওয়ার্কার স্টার্ট হবে
+    await start_worker() 
+    
+    print("✅ Bot and Worker are Online with Plugin Support!")
+    
+    # বটকে চালু রাখার জন্য ওয়েট করবে
+    await asyncio.Event().wait()
+
+# --- ENTRY POINT ---
 if __name__ == "__main__":
+    # Flask এবং Pinger আগের মতোই থাকবে
     flask_thread = Thread(target=run_flask)
     flask_thread.daemon = True
     flask_thread.start()
@@ -1937,13 +1979,7 @@ if __name__ == "__main__":
     ping_thread.daemon = True
     ping_thread.start()
     
-    print("🚀 Ultimate SPA Bot is Starting with Worker Support...")
-
-    async def main():
-        await bot.start()
-        await start_worker() # ডাটাবেস থেকে সেশন নিয়ে ওয়ার্কার অটো-চালু হবে
-        print("✅ Bot and Worker are Online!")
-        await asyncio.Event().wait()
+    print("🚀 Ultimate SPA Bot is Starting with Plugin System...")
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(main())
