@@ -1786,31 +1786,31 @@ async def text_handler(client, message):
         
     elif state == "wait_link_url":
         if message.video or message.document:
-            # We use the async background task so we don't have to wait!
             asyncio.create_task(process_file_upload(client, message, uid, convo["temp_name"]))
 
             if convo.get("post_id"):
                  convo["state"] = "edit_mode"
                  await message.reply_text(
-                    f"✅ **{convo['temp_name']}** ব্যাকগ্রাউন্ডে আপলোড শুরু হয়েছে!\nআপনি চাইলে আপলোড শেষ হওয়ার আগেই আরেকটি ফাইল অ্যাড করতে পারেন।", 
+                    f"✅ **{convo['temp_name']}** আপলোড শুরু হয়েছে!", 
                     reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Add Another Link", callback_data=f"add_lnk_edit_{uid}"), InlineKeyboardButton("✅ Finish", callback_data=f"gen_edit_{uid}")]]))
             else:
                 convo["state"] = "ask_links"
                 await message.reply_text(
-                    f"✅ **{convo['temp_name']}** ব্যাকগ্রাউন্ডে আপলোড শুরু হয়েছে!\nআপনি চাইলে আপলোড শেষ হওয়ার আগেই আরেকটি ফাইল অ্যাড করতে পারেন।", 
+                    f"✅ **{convo['temp_name']}** আপলোড শুরু হয়েছে!", 
                     reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Add Another", callback_data=f"lnk_yes_{uid}"), InlineKeyboardButton("🏁 Finish", callback_data=f"lnk_no_{uid}")]]))
 
         elif text.startswith("http"):
-            convo["links"].append({"label": convo["temp_name"], "url": text, "is_grouped": False})
-            if convo.get("post_id"):
-                 convo["state"] = "edit_mode"
-                 await message.reply_text(f"✅ Saved! Link: `{text}`", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Add Link", callback_data=f"add_lnk_edit_{uid}"), InlineKeyboardButton("✅ Finish", callback_data=f"gen_edit_{uid}")]]))
-            else:
-                convo["state"] = "ask_links"
-                await message.reply_text(f"✅ Saved! Total: {len(convo['links'])}", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ Add Another", callback_data=f"lnk_yes_{uid}"), InlineKeyboardButton("🏁 Finish", callback_data=f"lnk_no_{uid}")]]))
+            # 🔥 নতুন লজিক: ইউজারকে অপশন দেওয়া হবে
+            convo["temp_url"] = text
+            convo["state"] = "ask_url_mode"
+            btns = [
+                [InlineKeyboardButton("🚀 Mirror (Download & Rename)", callback_data=f"urlmode_mirror_{uid}")],
+                [InlineKeyboardButton("🔗 Just Save as Link", callback_data=f"urlmode_save_{uid}")]
+            ]
+            await message.reply_text("❓ **এই লিঙ্কটি নিয়ে আমি কি করবো?**\n\nআপনি যদি 'Mirror' এ ক্লিক করেন, তবে আমি এটি ডাউনলোড করে আপনার দেওয়া নামে রিনেম করে সব সার্ভারে আপলোড করবো।", reply_markup=InlineKeyboardMarkup(btns))
         else:
             await message.reply_text("⚠️ Invalid Input. URL or File required.")
-
+    
     # 🔥 NEW BATCH HANDLER
     elif state == "wait_batch_files":
         if text.lower() == "/done":
