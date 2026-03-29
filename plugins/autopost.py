@@ -8,7 +8,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import os
 
 # ডাটাবাস কানেকশন (মেইন ফাইল থেকে অটো কানেক্ট হবে)
-MONGO_URL = os.getenv("MONGO_URL")
+MONGO_URL = os.getenv("mongodb+srv://Filetolink270:Filetolink270@cluster0.tsr3api.mongodb.net/?appName=Cluster0")
 mongo_client = AsyncIOMotorClient(MONGO_URL)
 db = mongo_client["movie_bot_db"]
 # প্রতিটি ইউজারের আলাদা সেটিংস সেভ করার কালেকশন
