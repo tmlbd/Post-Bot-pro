@@ -1633,7 +1633,7 @@ async def process_file_upload(client, message, uid, temp_name):
         convo["pending_uploads"] = max(0, convo.get("pending_uploads", 0) - 1)
 
 
-@bot.on_message(filters.private & (filters.text | filters.video | filters.document | filters.photo) & ~filters.command(["start", "post", "manual", "edit", "history", "setadlink", "mysettings", "auth", "ban", "stats", "broadcast", "setownerads", "setshare", "setdel", "setapi", "cancel"]))
+@bot.on_message(filters.private & (filters.text | filters.video | filters.document | filters.photo) & ~filters.command(["start", "post", "manual", "edit", "history", "setadlink", "mysettings", "auth", "ban", "stats", "broadcast", "setownerads", "setshare", "setdel", "setapi", "cancel", "setup", "myconfig"]))
 async def text_handler(client, message):
     uid = message.from_user.id
     if uid not in user_conversations:
