@@ -6,48 +6,48 @@ import xml.etree.ElementTree as ET
 from pyrogram import filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-# মেইন ফাইল থেকে ডাটাবেস কালেকশন নেওয়া
+# ডাটাবাস কানেকশন
 db = __main__.db
 user_setup_col = db["user_autopost_configs"]
 
 async def register(bot):
-    print("🎬 Autopost Plugin: Active and Ready!")
+    # লগে দেখাবে যে এটি সচল
+    print("🎬 Autopost Plugin: High Priority Active!")
 
-    # --- ১. সেটিংস চেক করার কমান্ড ---
-    @bot.on_message(filters.command("myconfig") & filters.private)
+    # --- ১. সেটিংস চেক করা (Priority Group -1) ---
+    @bot.on_message(filters.command("myconfig") & filters.private, group=-1)
     async def check_config(client, message):
         uid = message.from_user.id
         config = await user_setup_col.find_one({"user_id": uid})
         if config:
             await message.reply_text(
-                f"⚙️ **আপনার বর্তমান সেটিংস:**\n\n"
-                f"📢 চ্যানেল: `{config.get('channel')}`\n"
-                f"🌐 ফিড: {config.get('feed')}\n"
-                f"🎥 টিউটোরিয়াল: {config.get('tutorial')}"
+                f"⚙️ **Config found for {message.from_user.first_name}:**\n\n"
+                f"📢 Channel: `{config.get('channel')}`\n"
+                f"🌐 Feed: {config.get('feed')}\n"
+                f"🎥 Tutorial: {config.get('tutorial')}"
             )
         else:
-            await message.reply_text("❌ আপনার কোনো সেটিংস পাওয়া যায়নি। `/setup` করুন।")
+            await message.reply_text("❌ No config found! Use `/setup` first.")
 
-    # --- ২. সেটআপ কমান্ড ---
-    @bot.on_message(filters.command("setup") & filters.private)
+    # --- ২. সেটআপ কমান্ড (Priority Group -1) ---
+    @bot.on_message(filters.command("setup") & filters.private, group=-1)
     async def setup_handler(client, message):
-        print(f"DEBUG: Setup triggered by {message.from_user.id}")
         try:
             parts = message.text.split(None, 3)
             if len(parts) < 4:
-                return await message.reply_text("❌ ভুল ফরম্যাট! সঠিক নিয়ম: `/setup @channel feed_url tutorial_url`")
+                return await message.reply_text("⚠️ **Format:** `/setup @channel feed_url tutorial_url`")
             
             uid = message.from_user.id
-            channel, feed_url, tutorial = parts[1], parts[2], parts[3]
+            channel, feed, tutorial = parts[1], parts[2], parts[3]
 
             await user_setup_col.update_one(
                 {"user_id": uid},
-                {"$set": {"channel": channel, "feed": feed_url, "tutorial": tutorial, "last_post_id": None}},
+                {"$set": {"channel": channel, "feed": feed, "tutorial": tutorial, "last_post_id": None}},
                 upsert=True
             )
-            await message.reply_text("✅ সেটিংস সফলভাবে সেভ হয়েছে! এখন নতুন পোস্টের জন্য অপেক্ষা করুন।")
+            await message.reply_text("✅ **Success!** Your website is now linked to your channel.")
         except Exception as e:
-            await message.reply_text(f"❌ এরর: {e}")
+            await message.reply_text(f"❌ Error: {e}")
 
     # --- ৩. অটো মনিটর লুপ ---
     async def monitor_feeds():
@@ -57,10 +57,13 @@ async def register(bot):
                 async with aiohttp.ClientSession() as session:
                     for config in configs:
                         try:
-                            f_url, l_id = config.get("feed"), config.get("last_post_id")
-                            target_chat, tutorial, uid = config.get("channel"), config.get("tutorial"), config.get("user_id")
+                            f_url = config.get("feed")
+                            l_id = config.get("last_post_id")
+                            target_chat = config.get("channel")
+                            tutorial = config.get("tutorial")
+                            uid = config.get("user_id")
 
-                            async with session.get(f_url, timeout=10) as resp:
+                            async with session.get(f_url, timeout=15) as resp:
                                 if resp.status != 200: continue
                                 xml_data = await resp.text()
                                 root = ET.fromstring(xml_data)
@@ -78,13 +81,11 @@ async def register(bot):
                                     img_match = re.search(r'<img.*?src="(.*?)"', content)
                                     poster = img_match.group(1) if img_match else None
                                     
-                                    caption = (f"🎬 **NEW UPDATE: {title}**\n━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                                               f"🎭 **Genre:** Movie | Series\n"
-                                               f"🔊 **Audio:** Dual Audio\n"
-                                               f"💎 **Quality:** 480p | 720p | 1080p\n\n"
-                                               f"━━━━━━━━━━━━━━━━━━━━━━\n📥 **Watch & Download Now 👇**")
+                                    caption = (f"🎬 **NEW POST:** {title}\n"
+                                               f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                                               f"📥 **ডাউনলোড করতে নিচের বাটনে ক্লিক করুন 👇**")
                                     
-                                    btns = InlineKeyboardMarkup([[InlineKeyboardButton("🔗 Watch / Download", url=link)],
+                                    btns = InlineKeyboardMarkup([[InlineKeyboardButton("🔗 Download Link", url=link)],
                                                                 [InlineKeyboardButton("📽️ How to Download", url=tutorial)]])
                                     
                                     if poster: await bot.send_photo(target_chat, poster, caption=caption, reply_markup=btns)
@@ -93,6 +94,8 @@ async def register(bot):
                                     await user_setup_col.update_one({"user_id": uid}, {"$set": {"last_post_id": p_id}})
                         except: continue
             except: pass
-            await asyncio.sleep(300)
+            await asyncio.sleep(300) # ৫ মিনিট পর পর চেক
 
-    asyncio.create_task(monitor_feeds())
+    asyncio.create_task(monitor_all_feeds())
+
+# লক্ষ্য করুন: আমি আগের monitor_feeds এর নাম monitor_all_feeds করেছি যাতে কনফ্লিক্ট না হয়।
