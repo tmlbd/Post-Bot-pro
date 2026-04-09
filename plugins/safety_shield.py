@@ -2,27 +2,59 @@
 import __main__
 import base64
 import re
+import requests
+import time
 
-# --- ১. কনফিগারেশন ---
+# --- ১. কনফিগারেশন ও কিওয়ার্ডস ---
 ADULT_KEYWORDS = [
     "erotic", "porn", "sexy", "nudity", "adult", "18+", "uncut", "kink", 
-    "sex", "brazzers", "web series", "hot scenes", "softcore", "nsfw"
+    "sex", "brazzers", "web series", "hot scenes", "softcore", "nsfw",
+    "x-rated", "hardcore", "kamini", "ullu", "kooku", "desifilm"
 ]
 
 # গুগল বটের জন্য একটি সেফ ইমেজ
 SAFE_PLACEHOLDER = "https://i.ibb.co/9TRmN8V/nsfw-placeholder.png"
+# ইমেজ যদি সার্ভার থেকে ডিলিট হয়ে যায় (ImgBB এর ক্ষেত্রে)
+BROKEN_IMAGE = "https://i.ibb.co/9cc7nPh/broken-image.png"
 
-# --- ২. গুগল বট ডিটেকশন ---
+# মেমরি ক্যাশ (একই ইমেজ বারবার আপলোড হওয়া রোধ করতে)
+URL_CACHE = {}
+
+# --- ২. টেলিগ্রাফ অটো-আপলোডার লজিক ---
+def upload_to_telegraph(img_url):
+    """ImgBB এর ডিলিট হওয়া থেকে বাঁচতে অটোমেটিক টেলিগ্রাফে ট্রান্সফার করবে"""
+    if img_url in URL_CACHE:
+        return URL_CACHE[img_url]
+    
+    # লোগো বা টেলিগ্রাম লিঙ্ক হলে ট্রান্সফার করার দরকার নেই
+    if any(x in img_src.lower() for x in ["logo", "icon", "telegram", "banner"]):
+        return img_url
+
+    try:
+        # ছবি ডাউনলোড
+        response = requests.get(img_url, timeout=10)
+        if response.status_code == 200:
+            files = {'file': ('image.jpg', response.content, 'image/jpeg')}
+            res = requests.post('https://telegra.ph/upload', files=files, timeout=15)
+            res_data = res.json()
+            if isinstance(res_data, list) and 'src' in res_data[0]:
+                new_url = 'https://telegra.ph' + res_data[0]['src']
+                URL_CACHE[img_url] = new_url
+                return new_url
+    except:
+        pass # কোনো ভুল হলে আগের লিঙ্কই রিটার্ন করবে
+    return img_url
+
+# --- ৩. গুগল বট ও অ্যাডাল্ট ডিটেকশন ---
 def is_google_bot():
     try:
         from flask import request
         ua = request.headers.get('User-Agent', '').lower()
-        bots = ["googlebot", "bingbot", "yandexbot", "baiduspider", "slurp", "duckduckbot"]
+        bots = ["googlebot", "bingbot", "yandexbot", "baiduspider", "slurp", "duckduckbot", "crawler"]
         return any(bot in ua for bot in bots)
     except:
         return False
 
-# --- ৩. অ্যাডাল্ট কন্টেন্ট চেক ---
 def is_content_adult(data):
     if data.get('adult') is True or data.get('force_adult') is True:
         return True
@@ -38,40 +70,37 @@ def is_content_adult(data):
 def encode_b64(text):
     return base64.b64encode(text.encode()).decode()
 
-# --- ৪. আধুনিক ডিজাইন ও স্ক্রিপ্ট (Premium UI + Anti-Blur Logic) ---
+# --- ৪. প্রিমিয়াম ডিজাইন ও লার্জ স্ক্রিনশট কন্ট্রোল (CSS & JS) ---
 def get_safety_shield_code(is_adult):
     if not is_adult:
         return "" 
 
-    # গুগল বটকে ইনডেক্স করতে বাধা দেওয়া
-    no_index = '<meta name="robots" content="noindex, nofollow, noarchive">' if is_adult else ""
+    no_index = '<meta name="robots" content="noindex, nofollow, noarchive">'
 
     return f"""
     {no_index}
     <style>
-        /* মাস্ক করা অবস্থায় স্টাইল */
+        /* মাস্কিং ডিজাইন */
         .nsfw-masked {{
             position: relative !important;
             overflow: hidden !important;
             cursor: pointer !important;
             border-radius: 12px;
-            background: #000 !important;
-            min-height: 280px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            background: #0d0d0d !important;
+            min-height: 320px;
+            display: flex; align-items: center; justify-content: center;
             border: 2px solid rgba(255, 77, 77, 0.2);
-            margin-bottom: 20px;
+            margin-bottom: 25px;
         }}
         .nsfw-masked img {{
-            filter: blur(70px) grayscale(1) !important;
-            opacity: 0.3 !important;
-            transition: 0.5s ease-in-out !important;
+            filter: blur(80px) grayscale(1) !important;
+            opacity: 0.25 !important;
+            transition: 0.6s ease-in-out !important;
             width: 100% !important;
             height: auto !important;
         }}
 
-        /* আনমাস্ক বা রিভিল করার পর স্টাইল (আপনার স্ক্রিনশট বড় দেখানোর জন্য) */
+        /* রিভিল হওয়ার পর স্টাইল (স্ক্রিনশট বড় দেখাবে) */
         .nsfw-unmasked {{
             display: block !important;
             min-height: auto !important;
@@ -82,49 +111,47 @@ def get_safety_shield_code(is_adult):
         .nsfw-unmasked img {{
             filter: blur(0px) grayscale(0) !important;
             opacity: 1 !important;
-            width: 100% !important; /* ইমেজ ফুল উইডথ হবে */
-            height: auto !important; /* ইমেজের রেশিও ঠিক থাকবে */
+            width: 100% !important;
+            height: auto !important;
             object-fit: contain !important;
-            border-radius: 8px;
-            margin-bottom: 10px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+            margin-bottom: 15px;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.8);
         }}
 
-        /* স্ক্রিনশট গ্রিড যদি থাকে তবে সেটিকে সুন্দর করা */
+        /* স্ক্রিনশট গ্রিড রেসপন্সিভ - মোবাইলে ১টি বড় ছবি, পিসিতে ২টি বড় ছবি */
         .screenshot-grid.nsfw-unmasked {{
             display: grid !important;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)) !important; /* স্ক্রিনশট বড় দেখাবে */
-            gap: 15px !important;
-            padding: 10px 0;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)) !important;
+            gap: 20px !important;
+            padding: 15px 0;
         }}
 
-        /* ওভারলে ডিজাইন */
+        /* ওভারলে এবং বাটন */
         .nsfw-overlay {{
             position: absolute; inset: 0;
-            background: rgba(0, 0, 0, 0.85);
-            backdrop-filter: blur(20px);
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(25px);
             display: flex; flex-direction: column;
             align-items: center; justify-content: center;
             z-index: 100; color: #fff; text-align: center;
             padding: 20px;
         }}
         .nsfw-btn {{
-            background: #ff4d4d; color: white; border: none;
-            padding: 12px 24px; border-radius: 50px; font-weight: bold;
+            background: linear-gradient(45deg, #ff4d4d, #c40000);
+            color: white; border: none;
+            padding: 14px 28px; border-radius: 50px; font-weight: bold;
             margin-top: 15px; cursor: pointer; text-transform: uppercase;
-            box-shadow: 0 4px 15px rgba(255, 77, 77, 0.4);
-            font-size: 14px;
-            transition: 0.3s;
+            box-shadow: 0 5px 20px rgba(255, 77, 77, 0.5);
+            font-size: 15px; transition: 0.3s;
         }}
-        .nsfw-btn:hover {{
-            background: #ff3333;
-            transform: scale(1.05);
-        }}
+        .nsfw-btn:hover {{ transform: scale(1.05); }}
+        
         .dmca-footer {{
-            margin-top: 40px; padding: 20px;
+            margin-top: 50px; padding: 25px;
             background: rgba(255, 255, 255, 0.03);
-            border-radius: 10px; border: 1px solid #333;
-            font-size: 12px; color: #888; text-align: center;
+            border-radius: 12px; border: 1px solid #222;
+            font-size: 13px; color: #777; text-align: center;
         }}
     </style>
     <script>
@@ -133,9 +160,15 @@ def get_safety_shield_code(is_adult):
             imgs.forEach(img => {{
                 const encodedUrl = img.getAttribute('data-raw');
                 if (encodedUrl) {{
-                    img.src = atob(encodedUrl);
+                    const finalUrl = atob(encodedUrl);
+                    img.src = finalUrl;
                     img.removeAttribute('data-raw');
-                }}
+                    // ব্যাকআপ এরর চেক (ImgBB ডিলিট করলে)
+                    img.onerror = function() {{
+                        this.src = "{BROKEN_IMAGE}";
+                        this.style.filter = "none"; this.style.opacity = "1";
+                    }};
+                }
             }});
             el.classList.add('nsfw-unmasked');
             const overlay = el.querySelector('.nsfw-overlay');
@@ -144,13 +177,13 @@ def get_safety_shield_code(is_adult):
         }}
     </script>
     <div class="dmca-footer">
-        <b>DMCA Disclaimer:</b> This website is a metadata portal. We do not host any copyrighted files. 
+        <b>Disclaimer:</b> This site only provides metadata. We do not host any files on our server. 
         <br><br>
-        <a href="https://t.me/CineZoneBD1" style="color:#ff4d4d; text-decoration:none;">Report / DMCA Request</a>
+        <a href="https://t.me/CineZoneBD1" style="color:#ff4d4d; text-decoration:none; font-weight:bold;">Report Violation / DMCA</a>
     </div>
     """
 
-# --- ৫. মেইন জেনারেটর (Logic Merging) ---
+# --- ৫. মেইন জেনারেটর প্রসেসর (Core Logic) ---
 if not hasattr(__main__, 'shield_old_html'):
     __main__.shield_old_html = __main__.generate_html_code
 
@@ -158,48 +191,50 @@ def safety_shield_generator(data, links, user_ads, owner_ads, share):
     is_adult = is_content_adult(data)
     is_bot = is_google_bot()
     
-    # গুগল বটের জন্য স্টিলথ মোড
+    # স্টিলথ মোড (বটের জন্য)
     if is_adult and is_bot:
-        data['title'] = "Restricted Content"
-        data['overview'] = "This content is not available for preview due to safety policies."
-        links = [] # বটকে ডাউনলোড লিঙ্ক দেখাবেন না
+        data['title'] = "Protected Content"
+        data['overview'] = "Preview is unavailable for this content due to safety guidelines."
+        links = [] 
 
+    # মেইন এইচটিএমএল জেনারেট করা
     html = __main__.shield_old_html(data, links, user_ads, owner_ads, share)
     
     if is_adult:
-        # ইমেজ রিপ্লেসমেন্ট (বট এবং ইউজারের জন্য আলাদা)
-        def secure_img_tags(match):
+        # ইমেজ রিপ্লেসমেন্ট এবং মাইগ্রেশন লজিক
+        def secure_and_migrate(match):
             img_src = match.group(1)
-            # লোগো বা টেলিগ্রাম আইকন হলে মাস্ক করার দরকার নেই
-            if any(x in img_src.lower() for x in ["logo", "icon", "telegram", "banner"]): 
+            
+            # লোগো/আইকন বাদ দিয়ে শুধু পোস্টার ও স্ক্রিনশট ধরবে
+            if any(x in img_src.lower() for x in ["logo", "icon", "telegram", "banner"]):
                 return match.group(0)
             
-            if is_bot:
-                # বটকে একদম ব্ল্যাঙ্ক ইমেজ দিন
-                return f'src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"'
+            # ImgBB থাকলে টেলিগ্রাফে পাঠানোর চেষ্টা করবে
+            migrated_url = img_src
+            if "ibb.co" in img_src.lower():
+                migrated_url = upload_to_telegraph(img_src)
             
-            encoded_url = encode_b64(img_src)
-            return f'src="{SAFE_PLACEHOLDER}" data-raw="{encoded_url}"'
+            if is_bot:
+                return 'src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"'
+            
+            return f'src="{SAFE_PLACEHOLDER}" data-raw="{encode_b64(migrated_url)}"'
 
-        html = re.sub(r'src="([^"]+)"', secure_img_tags, html)
+        # এইচটিএমএল-এর ইমেজ সোর্স পরিবর্তন
+        html = re.sub(r'src="([^"]+)"', secure_and_migrate, html)
 
-        # ওভারলে UI অ্যাড করা
-        overlay_html = '<div class="nsfw-overlay"><div>🔞 Adult Content</div><button class="nsfw-btn">Reveal Screenshots & Poster</button></div>'
+        # ওভারলে UI ইনজেকশন
+        overlay_html = '<div class="nsfw-overlay"><div>🔞 18+ Content Restricted</div><button class="nsfw-btn">Tap to Reveal Screenshots</button></div>'
         
-        # পোস্টার এবং স্ক্রিনশট সেকশনে মাস্কিং অ্যাপ্লাই
-        if '<div class="info-poster">' in html:
-            html = html.replace('<div class="info-poster">', f'<div class="info-poster nsfw-masked" onclick="revealNSFW(this)">{overlay_html}')
-        
-        if '<div class="screenshot-grid">' in html:
-            html = html.replace('<div class="screenshot-grid">', f'<div class="screenshot-grid nsfw-masked" onclick="revealNSFW(this)">{overlay_html}')
-        
-        # যদি আপনার থিমে অন্য কোন ক্লাসে স্ক্রিনশট থাকে (যেমন: 'screenshots')
-        if '<div class="screenshots">' in html:
-            html = html.replace('<div class="screenshots">', f'<div class="screenshots nsfw-masked" onclick="revealNSFW(this)">{overlay_html}')
+        # বিভিন্ন ডিভ ক্লাসে মাস্কিং অ্যাপ্লাই
+        targets = ['<div class="info-poster">', '<div class="screenshot-grid">', '<div class="screenshots">']
+        for target in targets:
+            if target in html:
+                class_name = target[12:-1]
+                html = html.replace(target, f'<div class="{class_name} nsfw-masked" onclick="revealNSFW(this)">{overlay_html}')
 
     return f"{html}\n{get_safety_shield_code(is_adult)}"
 
 __main__.generate_html_code = safety_shield_generator
 
 async def register(bot):
-    print("🛡️ All-in-One Safety Shield (Stealth + Premium Large UI) Activated!")
+    print("🛡️ Safety Shield Master V3 (Auto-Migration + Ultra Large View) Activated!")
