@@ -11,6 +11,13 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 db = __main__.db
 user_setup_col = db["user_autopost_configs"]
 
+def is_valid_url(url):
+    """লিংকটি সঠিক কি না পরীক্ষা করার ফাংশন"""
+    if not url or not isinstance(url, str):
+        return False
+    parsed = urlparse(url)
+    return all([parsed.scheme, parsed.netloc])
+
 def extract_info_from_blog(content):
     """ব্লগের কন্টেন্ট (HTML) থেকে তথ্য বের করার ফাংশন"""
     text = re.sub(r'<[^>]+>', ' ', content)
@@ -31,7 +38,7 @@ def extract_info_from_blog(content):
     return info
 
 async def register(bot):
-    print("🎬 Smart Multi-Autopost: Link Detector Activated!")
+    print("🎬 Smart Multi-Autopost: Link Detector & URL Fixer Activated!")
 
     @bot.on_message(filters.command("myconfig") & filters.private, group=-1)
     async def check_config(client, message):
@@ -55,6 +62,11 @@ async def register(bot):
                 return await message.reply_text("⚠️ **Format:** `/setup @channel feed_url tutorial_url`")
             
             channel, feed, tutorial = parts[1], parts[2], parts[3]
+            
+            # লিংক ভ্যালিডেশন
+            if not is_valid_url(feed) or not is_valid_url(tutorial):
+                return await message.reply_text("❌ Feed URL বা Tutorial URL সঠিক নয়! অবশ্যই `https://` থাকতে হবে।")
+
             await user_setup_col.update_one(
                 {"user_id": message.from_user.id, "channel": channel}, 
                 {"$set": {"feed": feed, "tutorial": tutorial, "last_post_id": None}},
@@ -64,32 +76,26 @@ async def register(bot):
         except Exception as e:
             await message.reply_text(f"❌ Error: {e}")
 
-    # --- স্মার্ট রিপোস্ট কমান্ড (লিংক ডিটেক্টর সহ) ---
     @bot.on_message(filters.command("repost") & filters.private)
     async def smart_repost(client, message):
         try:
             parts = message.text.split()
             if len(parts) < 2:
-                return await message.reply_text("⚠️ **Format:** `/repost https://yourbloglink.com/...`")
+                return await message.reply_text("⚠️ **Format:** `/repost link`")
             
             input_link = parts[1].strip()
-            # ইনপুট লিংকের ডোমেইন বের করা (যেমন: movies.com)
-            domain = urlparse(input_link).netloc
-            if not domain:
-                return await message.reply_text("❌ Invalid URL!")
+            if not is_valid_url(input_link):
+                return await message.reply_text("❌ ইনপুট লিংকটি সঠিক নয়!")
 
-            # ডাটাবেসে এই ডোমেইন বা ফিড মিল আছে এমন সব কনফিগ খোঁজা
+            domain = urlparse(input_link).netloc
             configs = await user_setup_col.find({"user_id": message.from_user.id}).to_list(None)
             
-            target_configs = []
-            for cfg in configs:
-                if domain in cfg.get("feed"):
-                    target_configs.append(cfg)
+            target_configs = [cfg for cfg in configs if domain in cfg.get("feed")]
 
             if not target_configs:
-                return await message.reply_text(f"❌ ডোমেইন `{domain}` এর জন্য কোনো চ্যানেল সেটআপ পাওয়া যায়নি। প্রথমে `/setup` করুন।")
+                return await message.reply_text(f"❌ ডোমেইন `{domain}` এর জন্য কোনো চ্যানেল পাওয়া যায়নি।")
 
-            status_msg = await message.reply_text("🔍 Matching site found! Scraping info...")
+            status_msg = await message.reply_text("🔍 Scraping info...")
 
             async with aiohttp.ClientSession() as session:
                 async with session.get(input_link, timeout=15) as resp:
@@ -118,23 +124,24 @@ async def register(bot):
                         f"📥 **ডাউনলোড করতে নিচের লিংকে ক্লিক করুন 👇**"
                     )
 
-                    # ম্যাচ করা সব চ্যানেলে পোস্ট করা
                     for cfg in target_configs:
                         target_chat = cfg.get("channel")
                         tutorial = cfg.get("tutorial")
 
-                        btns = InlineKeyboardMarkup([
-                            [InlineKeyboardButton("🔗 Watch & Download Now", url=input_link)],
-                            [InlineKeyboardButton("📽️ How to Download (Video)", url=tutorial)]
-                        ])
+                        # বাটন ফিল্টারিং যাতে ইনভ্যালিড ইউআরএল না যায়
+                        buttons = []
+                        if is_valid_url(input_link):
+                            buttons.append([InlineKeyboardButton("🔗 Watch & Download Now", url=input_link)])
+                        if is_valid_url(tutorial):
+                            buttons.append([InlineKeyboardButton("📽️ How to Download (Video)", url=tutorial)])
 
                         try:
-                            if poster: await bot.send_photo(target_chat, poster, caption=caption, reply_markup=btns)
-                            else: await bot.send_message(target_chat, caption, reply_markup=btns)
+                            if poster: await bot.send_photo(target_chat, poster, caption=caption, reply_markup=InlineKeyboardMarkup(buttons))
+                            else: await bot.send_message(target_chat, caption, reply_markup=InlineKeyboardMarkup(buttons))
                         except Exception as e:
                             print(f"Error sending to {target_chat}: {e}")
 
-                    await status_msg.edit(f"✅ Successfully Reposted to **{len(target_configs)}** channel(s) matching `{domain}`")
+                    await status_msg.delete()
 
         except Exception as e:
             await message.reply_text(f"❌ Error: {str(e)}")
@@ -146,8 +153,10 @@ async def register(bot):
                 async with aiohttp.ClientSession() as session:
                     for config in configs:
                         try:
-                            f_url, l_id = config.get("feed"), config.get("last_post_id")
-                            target_chat, tutorial = config.get("channel"), config.get("tutorial")
+                            f_url = config.get("feed")
+                            l_id = config.get("last_post_id")
+                            target_chat = config.get("channel")
+                            tutorial = config.get("tutorial")
                             doc_id = config.get("_id")
 
                             async with session.get(f_url, timeout=15) as resp:
@@ -184,14 +193,15 @@ async def register(bot):
                                         f"📥 **ডাউনলোড করতে নিচের লিংকে ক্লিক করুন 👇**"
                                     )
 
-                                    btns = InlineKeyboardMarkup([
-                                        [InlineKeyboardButton("🔗 Watch & Download Now", url=link)],
-                                        [InlineKeyboardButton("📽️ How to Download (Video)", url=tutorial)]
-                                    ])
+                                    buttons = []
+                                    if is_valid_url(link):
+                                        buttons.append([InlineKeyboardButton("🔗 Watch & Download Now", url=link)])
+                                    if is_valid_url(tutorial):
+                                        buttons.append([InlineKeyboardButton("📽️ How to Download (Video)", url=tutorial)])
 
                                     try:
-                                        if poster: await bot.send_photo(target_chat, poster, caption=caption, reply_markup=btns)
-                                        else: await bot.send_message(target_chat, caption, reply_markup=btns)
+                                        if poster: await bot.send_photo(target_chat, poster, caption=caption, reply_markup=InlineKeyboardMarkup(buttons))
+                                        else: await bot.send_message(target_chat, caption, reply_markup=InlineKeyboardMarkup(buttons))
                                         await user_setup_col.update_one({"_id": doc_id}, {"$set": {"last_post_id": p_id}})
                                     except Exception as e:
                                         print(f"Error sending to {target_chat}: {e}")
@@ -199,6 +209,6 @@ async def register(bot):
                             continue
             except Exception:
                 pass
-            await asyncio.sleep(30)
+            await asyncio.sleep(40)
 
     asyncio.create_task(monitor_feeds())
