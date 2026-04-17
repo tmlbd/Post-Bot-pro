@@ -984,7 +984,7 @@ def generate_html_code(data, links, user_ad_links_list, owner_ad_links_list, adm
         
         <!-- Promotional Content -->
         <div class="promo-box">
-            <a href="https://t.me/+6hvCoblt6CxhZjhl" target="_blank"><img src="{BTN_TELEGRAM}"></a>
+            <a href="https://t.me/DramaStoreKing" target="_blank"><img src="{BTN_TELEGRAM}"></a>
         </div>
     </div>
     {script_html}
